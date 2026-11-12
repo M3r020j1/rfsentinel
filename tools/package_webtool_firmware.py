@@ -2,10 +2,16 @@
 """Prepare le dossier webtool/firmware/ servi par le flasher navigateur.
 
 Le flasher charge un manifeste JSON, puis les trois images qu'il annonce.
-Ce script copie les binaires produits par idf.py build dans webtool/firmware/,
-et ecrit manifest.json + SHA256SUMS a cote d'eux. Les adresses et les
-parametres memoire ne viennent pas de flasher_args.json : ils sont imposes
-ici, identiques a ceux que la page refuse de laisser changer.
+Ce script copie les binaires produits par idf.py build dans deux dossiers :
+
+  bin/               les trois .bin et SHA256SUMS, pour un flash par esptool
+  webtool/firmware/  les memes images plus manifest.json, pour le flasher
+                     navigateur, qui resout firmware/ relativement a la page
+
+Les deux jeux sont ecrits dans la meme passe a partir du meme build, donc ils
+ne peuvent pas diverger. Les adresses et les parametres memoire ne viennent pas
+de flasher_args.json : ils sont imposes ici, identiques a ceux que la page
+refuse de laisser changer.
 
 Usage :
     python3 tools/package_webtool_firmware.py [--build build]
@@ -22,6 +28,7 @@ from pathlib import Path
 
 RACINE = Path(__file__).resolve().parent.parent
 DEST = RACINE / "webtool" / "firmware"
+BIN = RACINE / "bin"
 PUCE = "esp32s3"
 CHIP_FAMILY = "ESP32-S3"
 PARAMETRES = {"flashMode": "dio", "flashFreq": "80m", "flashSize": "16MB"}
@@ -90,6 +97,7 @@ def main():
     controler_build(build)
 
     DEST.mkdir(parents=True, exist_ok=True)
+    BIN.mkdir(parents=True, exist_ok=True)
     entete = version()
     parties = []
     empreintes = []
@@ -100,7 +108,14 @@ def main():
             copie.stat().st_size != source.stat().st_size
         ):
             shutil.copyfile(source, copie)
+        miroir = BIN / nom
+        if not miroir.exists() or miroir.stat().st_size != source.stat().st_size or (
+            source.stat().st_mtime_ns > miroir.stat().st_mtime_ns
+        ):
+            shutil.copyfile(source, miroir)
         digest = sha256(copie)
+        if sha256(miroir) != digest:
+            raise SystemExit("bin/%s ne correspond pas a webtool/firmware/%s" % (nom, nom))
         signature = md5(copie)
         taille = copie.stat().st_size
         parties.append({"id": cle, "name": cle, "file": nom, "path": nom, "offset": adresse,
@@ -121,8 +136,10 @@ def main():
         json.dumps(manifeste, indent=2, ensure_ascii=False) + chr(10), encoding="utf-8"
     )
     (DEST / "SHA256SUMS").write_text("".join(empreintes), encoding="utf-8")
+    (BIN / "SHA256SUMS").write_text("".join(empreintes), encoding="utf-8")
 
-    print("RFSentinel %s -> %s/" % (entete, DEST.relative_to(RACINE)))
+    print("RFSentinel %s -> %s/ et %s/" % (entete, DEST.relative_to(RACINE),
+                                           BIN.relative_to(RACINE)))
     for p in parties:
         print("  0x%05X  %-22s %9d octets  sha256 %s" % (p["offset"], p["file"], p["size"],
                                                          p["sha256"][:16]))

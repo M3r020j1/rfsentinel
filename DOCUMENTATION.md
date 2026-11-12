@@ -1,949 +1,962 @@
-# RFSentinel — Documentation complète du projet
+# RFSentinel — Full project documentation
 
-> Document de référence : vision, architecture, choix techniques, API, utilisation,
-> état réel du projet et constantes. Toutes les valeurs sont relevées dans le code
-> de la version 1.0.0.
+> **Language:** English · [Français](docs/fr/DOCUMENTATION.md)
 
----
-
-## 1. Vision du produit
-
-**RFSentinel** est un capteur autonome de **surveillance passive d'environnement
-radio** (Wi-Fi 2.4 GHz + Bluetooth Low Energy) tenu par un dongle **LilyGO
-T-Dongle S3 (ESP32-S3)**.
-
-Il :
-
-- **détecte passivement** les équipements à proximité — réseaux Wi-Fi publiés et
-  périphériques BLE qui diffusent — sans se connecter à rien ;
-- **enregistre** les observations dans sa **flash interne** (LittleFS), avec
-  rotation circulaire ;
-- fournit une **interface Web embarquée** bilingue FR/EN, thèmes clair et sombre,
-  pour consulter, trier, filtrer, cartographier, exporter et purger ;
-- **recherche les équipements dans les tables publiques de WiGLE** et permet un
-  **upload manuel** du journal au format WiGLE ;
-- **alerte en MQTT** à l'apparition d'un nouvel équipement ;
-- fonctionne **sans rattachement réseau obligatoire** : un point d'accès de
-  secours intégré prend le relais, et les scans ne s'arrêtent jamais ;
-- affiche sur son **écran TFT** l'adresse à ouvrir et l'état des scans.
-
-Cas d'usage : wardriving passif, cartographie de réseaux, audit de proximité,
-veille d'environnement radio, inventaire BLE, recherche d'un émetteur dans une
-pièce.
-
-**Cadre légal et éthique** : RFSentinel n'observe que des trames **librement
-diffusées** (beacons Wi-Fi, advertisements BLE). Il ne se connecte à aucun réseau,
-ne déchiffre rien, n'intercepte aucune communication et n'identifie personne.
-L'utilisateur reste responsable du respect de la réglementation locale sur la
-capture de données radio et sur l'usage qu'il en fait.
+> Reference document: vision, architecture, trade-offs, API, usage, real project
+> state and constants. Every value is taken from the code of version 1.0.0.
 
 ---
 
-## 2. Cible matérielle
+## 1. Product vision
 
-| Élément | Valeur |
+**RFSentinel** is a standalone sensor for **passive radio-environment
+monitoring** (Wi-Fi 2.4 GHz + Bluetooth Low Energy), built around a **LilyGO
+T-Dongle S3 (ESP32-S3)** dongle.
+
+It:
+
+- **detects nearby devices passively** — published Wi-Fi networks and
+  advertising Bluetooth LE peripherals — without joining anything;
+- **records observations in its own flash** (LittleFS), with circular rotation;
+- ships an **embedded web interface**, bilingual FR/EN with light and dark
+  themes, to browse, sort, filter, map, export and purge;
+- **looks devices up in the public WiGLE tables** and supports **manual upload**
+  of the journal in WiGLE format;
+- **raises MQTT alerts** when a new device appears;
+- runs **without any required network**: a built-in rescue access point takes
+  over, and scanning never stops;
+- shows on its **TFT screen** the address to open and the state of the scans.
+
+Use cases: passive wardriving, network mapping, proximity audit, radio
+environment watch, BLE inventory, hunting a transmitter in a room.
+
+**Legal and ethical frame**: RFSentinel only observes **freely broadcast**
+frames — Wi-Fi beacons and BLE advertisements. It connects to no network,
+decrypts nothing, intercepts no communication and identifies nobody. The user
+remains responsible for complying with local regulations on radio capture and on
+the use made of the data.
+
+---
+
+## 2. Hardware target
+
+| Item | Value |
 |---|---|
-| Carte | LilyGO **T-Dongle S3** (ESP32-S3) |
-| Flash | **16 Mo interne** — aucune carte SD, la dépendance SD/FatFs a été supprimée |
-| PSRAM | **Aucune** — tout est dimensionné en RAM interne |
-| Écran | TFT **ST7735**, panneau 128×160 piloté en **160×80 paysage** |
-| Wi-Fi | 2,4 GHz uniquement, scan **100 % passif** |
-| BLE | NimBLE, **central + observer**, uniquement par advertisements |
-| GPS | **Aucun** — latitude/longitude saisies à la main, `0` = inconnu |
-| USB | USB-C, périphérique USB-Serial-JTAG |
+| Board | LilyGO **T-Dongle S3** (ESP32-S3) |
+| Flash | **16 MB internal** — no SD card, the SD/FatFs dependency was removed |
+| PSRAM | **None** — everything is sized for internal RAM |
+| Screen | TFT **ST7735**, 128×160 panel driven as **160×80 landscape** |
+| Wi-Fi | 2.4 GHz only, **100 % passive** scan |
+| BLE | NimBLE, **central + observer**, advertisements only |
+| GPS | **None** — latitude/longitude entered by hand, ``0` = unknown |
+| USB | USB-C, USB-Serial-JTAG device |
 
-### Brochage de l'écran
+### Screen wiring
 
- Relevé dans `display.c`, confirmé sur la carte :
+Read from ``display.c`, confirmed on the board:
 
-| Rôle | GPIO | Constante |
+| Role | GPIO | Constant |
 |---|---|---|
-| SPI clock | **5** | `RFS_PIN_LCD_CLK` |
-| SPI MOSI | **3** | `RFS_PIN_LCD_MOSI` |
-| Data/Command | **2** | `RFS_PIN_LCD_DC` |
-| Reset | **1** | `RFS_PIN_LCD_RST` |
-| Chip select | **4** | `RFS_PIN_LCD_CS` |
-| Rétroéclairage | **38**, **actif à l'état bas** | `RFS_PIN_LCD_BL` |
+| SPI clock | **5** | ``RFS_PIN_LCD_CLK` |
+| SPI MOSI | **3** | ``RFS_PIN_LCD_MOSI` |
+| Data/Command | **2** | ``RFS_PIN_LCD_DC` |
+| Reset | **1** | ``RFS_PIN_LCD_RST` |
+| Chip select | **4** | ``RFS_PIN_LCD_CS` |
+| Backlight | **38**, **active low** | ``RFS_PIN_LCD_BL` |
 
-Le bus est `SPI2_HOST`, cadencé à 20 MHz, mode SPI 0, file de 10 transferts,
-16 bits par pixel en ordre BGR. Le format paysage 160×80 de la T-Dongle S3
-obtient par `swap_xy(true)` + `mirror(false, true)` + `set_gap(1, 26)`, conforme
-à l'exemple officiel LilyGO. Le rétroéclairage s'allume sur `GPIO` bas et
-s'éteint sur `GPIO` haut.
+The bus is ``SPI2_HOST` at 20 MHz, SPI mode 0, a queue of 10 transfers, 16
+bits per pixel in BGR order. The T-Dongle S3 landscape 160×80 format comes from
+``swap_xy(true)` + ``mirror(false, true)` + ``set_gap(1, 26)`,
+matching the official LilyGO example. The backlight turns on with the GPIO low
+and off with the GPIO high.
 
 ---
 
 ## 3. Architecture
 
-### 3.1 Organisation
+### 3.1 Layout
 
-Projet **ESP-IDF v5.3.2** (pas d'Arduino), structure standard :
+**ESP-IDF v5.3.2** project (no Arduino), standard structure:
 
 ```
 rfsentinel/
-├── CMakeLists.txt            # projet (min + idf_project_default)
-├── README.md                 # page d'accueil du dépôt
-├── DOCUMENTATION.md          # ce fichier
+├── CMakeLists.txt            # project (min + idf_project_default)
+├── README.md                 # repository landing page (English)
+├── DOCUMENTATION.md          # this file (English)
 ├── LICENSE                   # CC BY-NC-SA 4.0
 ├── partitions.csv            # nvs 24K, phy_init 4K, factory 3M, storage 13M
-├── sdkconfig.defaults        # config de build figée (16 Mo, pas de PSRAM, NimBLE…)
-├── logo/                     # SVG (WebUI) + bitmap OLED
+├── sdkconfig.defaults        # pinned build config (16 MB, no PSRAM, NimBLE…)
+├── bin/                      # release images + SHA256SUMS
+├── docs/fr/                  # French README and documentation
+├── logo/                     # SVG (WebUI) + OLED bitmap
 │   ├── rfsentinel-logo.svg
 │   ├── rfsentinel-icon.svg
 │   ├── rfsentinel-oled-icon.svg
 │   └── rfsentinel-oled-wordmark.svg
-├── screen/                   # captures d'écran de la page d'accueil
-├── tools/generate_lcd_logo.py  # SVG -> bitmap 1 bpp pour l'écran
-├── tests/                    # tests exécutés sur l'hôte (Python, JS, C)
+├── screen/                   # screenshots used on the landing page
+├── tools/generate_lcd_logo.py  # SVG -> 1 bpp bitmap for the screen
+├── tests/                    # host-side tests (Python, JS, C)
 └── main/
     ├── CMakeLists.txt        # SRCS + EMBED_FILES (ui/index.html + 2 logos)
-    ├── idf_component.yml     # dépendances figées (littlefs ==1.23.1)
-    ├── version.h             # RFS_VERSION, source unique de la version
-    ├── main.c                # bootstrap + boucle d'entretien
-    ├── config.c/h            # configuration NVS, secrets, validation
-    ├── auth.c/h              # session WebUI (cookie) + anti-force-brute
-    ├── net.c/h               # Wi-Fi STA + AP secours + NTP + qualité d'horodatage
-    ├── scanner.c/h           # scans passifs Wi-Fi et BLE, calibration, recherche
-    ├── store.c/h             # journal LittleFS, CSV WiGLE, rotation, blacklist, export
-    ├── mqtt.c/h              # alertes MQTT (esp-mqtt)
-    ├── presence.c/h          # MAC surveillées, alertes de présence
-    ├── wigle.c/h             # upload et recherche WiGLE (API v2, HTTPS)
-    ├── web.c                 # serveur HTTP embarqué (esp_http_server + cJSON)
-    ├── display.c/h           # écran ST7735 (boot, statut, veille, langue)
-    ├── oled_font.h           # glyphs 8×16 (uint16_t, un mot par colonne)
-    ├── oled_logo.h           # logo 64×64 1 bpp (bitmap)
-    ├── ui/index.html         # SPA WebUI, embarquée par EMBED_FILES
-    └── lcd/esp_lcd_st7735.c/h  # driver ST7735 local
+    ├── idf_component.yml     # pinned dependencies (littlefs ==1.23.1)
+    ├── version.h             # RFS_VERSION, single source of the version
+    ├── main.c                # bootstrap + housekeeping loop
+    ├── config.c/h            # NVS configuration, secrets, validation
+    ├── auth.c/h              # WebUI session (cookie) + anti brute-force
+    ├── net.c/h               # Wi-Fi STA + rescue AP + NTP + timestamp quality
+    ├── scanner.c/h           # passive Wi-Fi and BLE scans, calibration, hunting
+    ├── store.c/h             # LittleFS journal, WiGLE CSV, rotation, blacklist, export
+    ├── mqtt.c/h              # MQTT alerts (esp-mqtt)
+    ├── presence.c/h          # watched MACs, presence alerts
+    ├── wigle.c/h             # WiGLE upload and lookup (API v2, HTTPS)
+    ├── web.c                 # embedded HTTP server (esp_http_server + cJSON)
+    ├── display.c/h           # ST7735 screen (boot, status, auto-off, language)
+    ├── oled_font.h           # 8×16 glyphs (uint16_t, one word per column)
+    ├── oled_logo.h           # 64×64 1 bpp logo (bitmap)
+    ├── ui/index.html         # WebUI SPA, embedded through EMBED_FILES
+    └── lcd/esp_lcd_st7735.c/h  # local ST7735 driver
 ```
 
-### 3.2 Flux de données
+### 3.2 Data flow
 
 ```
-[Wi-Fi passif]─┐
-               ├─► scanner ─► store (CSV /rfs/observations) ─► wigle (upload manuel)
+[Wi-Fi passive]─┐
+               ├─► scanner ─► store (CSV /rfs/observations) ─► wigle (manual upload)
 [BLE adv]──────┘      │
-                      ├─► mqtt (alertes nouveaux équipements)
-                      ├─► presence (équipements surveillés)
-                      └─► web (API JSON + UI)  ◄─── navigateur
+                      ├─► mqtt (new-device alerts)
+                      ├─► presence (watched devices)
+                      └─► web (JSON API + UI)  ◄─── browser
 ```
 
-- Le scanner tourne dans sa **propre tâche FreeRTOS** et n'est jamais bloqué par
-  le reste ; la pile de la tâche principale est portée à 6144 octets.
-- `store` est le **seul** utilisateur du système de fichiers ; `web` ne fait que
-  sérialiser en JSON et lire par flux bornés.
-- `net` fournit l'heure UTC **au mieux** : NTP si la liaison le permet, sinon
-  référence enregistrée + temps de fonctionnement.
-- `config` est chargée **une fois** en RAM (`app_config_t`) et écrite en NVS avec
-  parcimonie.
-- La boucle principale de `main.c` ne fait que `net_tick()` et `display_tick()`
-  chaque seconde, avec un rafraîchissement d'écran tous les 5 s.
+- The scanner runs in **its own FreeRTOS task** and is never blocked by the rest;
+  the main task stack is raised to 6144 bytes.
+- ``store` is the **only** user of the filesystem; ``web` only serialises
+  JSON and reads through bounded streams.
+- ``net` supplies UTC time **best effort**: NTP when the link allows it,
+  otherwise a stored reference plus uptime.
+- ``config` is loaded **once** into RAM (``app_config_t`) and written to
+  NVS sparingly.
+- The main loop in ``main.c` only calls ``net_tick()` and
+  ``display_tick()` every second, with a screen refresh every 5 s.
 
-### 3.3 Principes de conception
+### 3.3 Design principles
 
-1. **Allocation dynamique bornée** : tampons statiques pour le chemin critique,
-   tas réservé aux requêtes ponctuelles, et libérations sur toutes les sorties.
-2. **Jamais bloquant** dans la boucle principale : scans périodiques, tick réseau
-   non bloquant, upload et purge exécutés en arrière-plan avec statut intermédiaire.
-3. **Résilience aux coupures** : LittleFS, journal en fichiers, rotation douce.
-   Rien ne se détruit au redémarrage, la config survit en NVS.
-   `format_if_mount_failed=false` : **aucune mise en forme automatique** si le
-   montage échoue, pour ne jamais effacer un journal encore lisible.
-4. **Écritures flash limitées** : NVS réservé à la config, référence d'horloge
-   écrite au plus une fois par heure, journal en segments de 32 Ko.
-5. **Dépendances minimales** : ESP-IDF + `joltwallet/littlefs` (composant managé,
-   version figée) + cJSON + NimBLE + esp_http_server + esp_http_client + esp-mqtt.
-6. **Secrets jamais exposés** : token WiGLE, mots de passe et clé Wi-Fi ne
-   sortent ni des réponses API, ni des journaux, ni des exports.
-7. **Une fonctionnalité n'est pas opérationnelle parce qu'elle compile** : elle
-   l'est quand elle a été observée sur la carte.
+1. **Bounded dynamic allocation**: static buffers on the critical path, the heap
+   reserved for one-off requests, and frees on every exit.
+2. **Never blocking** in the main loop: periodic scans, non-blocking network
+   tick, upload and purge run in the background with an intermediate status.
+3. **Resilience to outages**: LittleFS, journal in files, gentle rotation.
+   Nothing is destroyed on restart, the configuration survives in NVS.
+   ``format_if_mount_failed=false`: **no automatic formatting** if mounting
+   fails, so a still-readable journal is never erased.
+4. **Limited flash writes**: NVS reserved for configuration, clock reference
+   written at most once an hour, journal in 32 KB segments.
+5. **Minimal dependencies**: ESP-IDF + ``joltwallet/littlefs` (managed
+   component, pinned version) + cJSON + NimBLE + esp_http_server +
+   esp_http_client + esp-mqtt.
+6. **Secrets never exposed**: the WiGLE token, passwords and the Wi-Fi key never
+   leave the device through API responses, logs or exports.
+7. **A feature is not operational because it compiles**: it is operational when
+   it has been observed on the board.
 
 ---
 
-## 4. Choix techniques et justifications
 
-| # | Choix | Alternative écartée | Pourquoi |
+## 4. Technical choices and rationale
+
+| # | Choice | Alternative rejected | Why |
 |---|---|---|---|
-| 1 | **ESP-IDF v5.3.2** | Arduino / PlatformIO | contrôle fin de httpd, NimBLE, NVS et esp_lcd ; build reproductible |
-| 2 | **LittleFS** (`joltwallet/littlefs` ==1.23.1) | SPIFFS | usure répartie, dossiers, suppressions propres ; version figée = builds reproductibles |
-| 3 | **Flash interne, pas de SD** | carte SD FatFs | un retrait de carte ne détruit plus le journal ; pas de connecteur, pas de bourrage |
-| 4 | **Point de montage `/rfs`** | `/sd` | plus de carte SD ; chemin unique et explicite |
-| 5 | **Rotation par fichiers et segments** | effacement global | on ne perd jamais tout ; les plus anciens partent un par un |
-| 6 | **Segments de 32 Ko dans le fichier du jour** | un fichier par jour sans borne | borne la quantité d'historique que la rotation peut emporter |
-| 7 | **Scan Wi-Fi 100 % passif** (`WIFI_SCAN_TYPE_PASSIVE`) | scan actif | furtivité, légalité, aucune association, aucun trafic émis |
-| 8 | **BLE par advertisements seulement** | connexion GATT | observer sans interagir ; `filter_duplicates=1` |
-| 9 | **NimBLE central + observer** | observer seul | la recherche d'un émetteur proche a besoin du rôle central ; peripheral et broadcaster restent désactivés |
-| 10 | **CSV `WigleWifi-1.6`** | format propriétaire | le journal se recharge tel quel sur WiGLE, sans conversion |
-| 11 | **Upload WiGLE manuel** | upload automatique | contrôle de l'utilisateur, quota, éthique |
-| 12 | **Recherche WiGLE côté capteur** | appel direct depuis le navigateur | le token ne quitte jamais l'appareil |
-| 13 | **Position saisie à la main + géocodage** | GPS embarqué | le dongle n'a pas de GPS ; la recherche d'adresse évite la saisie de coordonnées |
-| 14 | **Carte en `<canvas>` maison + tuiles OSM** | Leaflet | aucune librairie externe à embarquer, repli sur une grille sans Internet |
-| 15 | **Deux seuils RSSI distincts** (`min_rssi`, `mqtt_min_rssi`) | seuil unique | un équipement lointain peut être enregistré sans déclencher d'alerte |
-| 16 | **STA + AP de secours** | STA seul | utilisable hors réseau ; l'AP s'active si la STA échoue, **sans interrompre les scans** |
-| 17 | **NTP + référence enregistrée** | horodatage brut | horodatage exploitable même hors ligne, avec qualité `ESTIMATED` assumée |
-| 18 | **Heure réglée depuis le navigateur** | aucun repli hors ligne | en mode AP seul, aucune source d'heure n'est joignable ; la qualité reste `ESTIMATED`, sans usurper une synchro NTP |
-| 19 | **NVS pour la config** | fichier de config | atomicité, robustesse, aucune dépendance au système de fichiers |
-| 20 | **UI embarquée** (`EMBED_FILES`) | CDN externe | fonctionne en mode AP sans Internet |
-| 21 | **Bilingue FR/EN + thèmes clair et sombre** | mono-langue, thème unique | l'appareil se consulte aussi bien en extérieur qu'en intérieur |
-| 22 | **Session cookie + anti-force-brute** | basic auth seule | l'appareil ne doit pas être pilotable par n'importe qui sur le réseau |
-| 23 | **Changement de mot de passe imposé si `admin/admin`** | valeurs par défaut acceptées | hygiène de base |
-| 24 | **Ressources bitmap préconverties** | parsing SVG sur MCU | un ESP32 ne parse pas du SVG ; police 8×16 et logo 64×64 en 1 bpp dans la flash |
-| 25 | **WiGLE en HTTPS (bundle CA complet)** | HTTP | le token ne circule jamais en clair |
-| 26 | **Déduplication + blacklist** | enregistrement brut | éviter le spam de répétitions et ignorer définitivement des équipements connus |
-| 27 | **Tampons WiGLE réduits, lignes plafonnées** | copier toute la réponse | sans PSRAM, le tas est la ressource rare : 6 Ko de corps, 10 lignes maximum |
+| 1 | **ESP-IDF v5.3.2** | Arduino / PlatformIO | fine control of httpd, NimBLE, NVS and esp_lcd; reproducible build |
+| 2 | **LittleFS** (``joltwallet/littlefs` ==1.23.1) | SPIFFS | wear levelling, folders, clean deletes; pinned version = reproducible builds |
+| 3 | **Internal flash, no SD** | SD card with FatFs | pulling a card no longer destroys the journal; no connector, no jamming |
+| 4 | **Mount point ``/rfs`** | ``/sd` | no SD card any more; one explicit path |
+| 5 | **Rotation by files and segments** | full wipe | you never lose everything; the oldest files leave one at a time |
+| 6 | **32 KB segments inside today's file** | one unbounded file per day | bounds how much history a rotation can take with it |
+| 7 | **100 % passive Wi-Fi scan** (``WIFI_SCAN_TYPE_PASSIVE`) | active scan | stealth, legality, no association, no emitted traffic |
+| 8 | **BLE through advertisements only** | GATT connection | observe without interacting; ``filter_duplicates=1` |
+| 9 | **NimBLE central + observer** | observer only | hunting a nearby transmitter needs the central role; peripheral and broadcaster stay off |
+| 10 | **CSV `WigleWifi-1.6`** | proprietary format | the journal reloads into WiGLE as is, with no conversion |
+| 11 | **Manual WiGLE upload** | automatic upload | user control, quota, ethics |
+| 12 | **WiGLE lookup on the sensor** | direct call from the browser | the token never leaves the device |
+| 13 | **Hand-entered position + geocoding** | onboard GPS | the dongle has no GPS; address lookup avoids typing coordinates |
+| 14 | **Home-made `<canvas>` map + OSM tiles** | Leaflet | no external library to embed, falls back to a grid without Internet |
+| 15 | **Two separate RSSI thresholds** (``min_rssi`, ``mqtt_min_rssi`) | single threshold | a distant device can be recorded without triggering an alert |
+| 16 | **STA + rescue AP** | STA only | usable off-network; the AP starts if STA fails, **without interrupting scans** |
+| 17 | **NTP + stored reference** | raw timestamp | usable timestamps even offline, with an honest `ESTIMATED` quality |
+| 18 | **Time set from the browser** | no offline fallback | in AP-only mode no time source is reachable; quality stays `ESTIMATED`, without pretending NTP |
+| 19 | **NVS for configuration** | config file | atomicity, robustness, no dependency on the filesystem |
+| 20 | **Embedded UI** (``EMBED_FILES`) | external CDN | works in AP mode without Internet |
+| 21 | **Bilingual FR/EN + light and dark themes** | single language, single theme | the device is read outdoors as well as indoors |
+| 22 | **Session cookie + anti brute-force** | basic auth alone | the device must not be controllable by anyone on the network |
+| 23 | **Forced password change when still `admin/admin`** | default values accepted | basic hygiene |
+| 24 | **Pre-converted bitmap resources** | SVG parsing on the MCU | an ESP32 does not parse SVG; 8×16 font and 64×64 logo in 1 bpp in flash |
+| 25 | **WiGLE over HTTPS (full CA bundle)** | HTTP | the token never travels in clear text |
+| 26 | **De-duplication + blacklist** | raw recording | avoid spamming repeats and permanently ignore known devices |
+| 27 | **Reduced WiGLE buffers, capped rows** | copy the whole response | without PSRAM the heap is the scarce resource: 6 KB of body, 10 rows maximum |
 
 ---
 
-## 5. Modèle de données
+## 5. Data model
 
-### 5.1 Observation (`s3_obs_t`, `store.h`)
+### 5.1 Observation (``s3_obs_t`, `store.h`)
 
 ```c
 typedef struct {
-    char mac[18];     // "AA:BB:CC:DD:EE:FF" (BSSID Wi-Fi ou BDADDR BLE)
-    char ssid[33];    // SSID Wi-Fi ou nom BLE (peut être vide)
+    char mac[18];     // "AA:BB:CC:DD:EE:FF" (Wi-Fi BSSID or BLE BDADDR)
+    char ssid[33];    // Wi-Fi SSID or BLE name (may be empty)
     char auth[16];    // "Open", "WPA2", "WPA3", "BLE"…
-    char ts[20];      // "YYYY-MM-DD HH:MM:SS" en UTC
-    int  channel;     // canal Wi-Fi (0 pour BLE)
-    int  freq;        // kHz (2412..2472 en Wi-Fi, 0 pour BLE)
-    int  rssi;        // dBm (négatif)
-    int  mfgr;        // réservé (0)
+    char ts[20];      // "YYYY-MM-DD HH:MM:SS" in UTC
+    int  channel;     // Wi-Fi channel (0 for BLE)
+    int  freq;        // kHz (2412..2472 for Wi-Fi, 0 for BLE)
+    int  rssi;        // dBm (negative)
+    int  mfgr;        // reserved (0)
     bool is_ble;      // false = Wi-Fi, true = BLE
-    uint8_t time_quality;  // 0 inconnu, 1 estimé, 2 synchronisé NTP
+    uint8_t time_quality;  // 0 unknown, 1 estimated, 2 NTP synchronised
 } s3_obs_t;
 ```
 
-### 5.2 Écriture dans le journal
+### 5.2 Writing to the journal
 
-Une ligne par observation, dans l'ordre des champs du format WiGLE : MAC, SSID
-(échappé), verrouillage, heure UTC, canal, radio (24 GHz), force, latitude et
-longitude configurées, fabricant, puis le type `WIFI` ou `BLE` en dernière
-colonne. Les champs que le capteur ne peut pas connaître restent vides.
+One line per observation, in the field order of the WiGLE format: MAC, SSID
+(escaped), lock, UTC time, channel, radio (24 GHz), signal, configured latitude
+and longitude, manufacturer, then `WIFI` or `BLE` as the last column. Fields the
+sensor cannot know stay empty.
 
 ### 5.3 Journal (`store.c`)
 
-- Un fichier **par jour** : `/rfs/observations/obs_YYYYMMDD.csv`, avec l'en-tête
-  WiGLE en première ligne.
-- Le fichier du jour est découpé en **segments de 32 Ko**
-  (`RFS_SEGMENT_MAX_BYTES`) : une rotation n'emporte jamais plus d'un segment,
-  donc au plus 32 Ko d'histoire.
-- Un nouveau segment s'ouvre aussi quand la **qualité d'horodatage change**, pour
-  que des heures sûres et des heures estimées ne se mélangent pas dans un segment.
-- **Rotation circulaire** : au-delà de `RFS_USAGE_LIMIT_PCT` (90 % de la
-  partition), les fichiers les plus anciens partent **un par un** ; un plafond de
-  `RFS_OBS_MAX_FILES` (32) fichiers borne aussi la croissance. Jamais de
-  formatage total, et **les scans ne s'interrompent jamais** parce que le journal
-  est plein.
-- **Déduplication** : table `s_seen` de 128 MAC en RAM ; un équipement redevient
-  « nouveau » après `rediscover_min` minutes d'absence.
-- **Blacklist** : MAC ignorées à l'écriture, ajoutées et retirées depuis l'UI,
-  persistées en NVS (`bl_` plus un index `bl_idx`), cache de 64 entrées.
-- **Tri et filtres à la demande** : clés `date`, `mac`, `ssid`, `rssi`, `tsq`,
-  `type`, en sens croissant ou décroissant, avec filtre par plage horaire.
-- **Export** : lecture séquentielle de tous les segments dans un seul flux CSV au
-  format WiGLE, sans jamais charger le journal en mémoire.
+- One file **per day**: `/rfs/observations/obs_YYYYMMDD.csv`, with the WiGLE
+  header on the first line.
+- Today's file is split into **32 KB segments** (``RFS_SEGMENT_MAX_BYTES`): a
+  rotation never takes more than one segment, so at most 32 KB of history.
+- A new segment also opens when the **timestamp quality changes**, so that reliable
+  times and estimated times never mix inside one segment.
+- **Circular rotation**: past ``RFS_USAGE_LIMIT_PCT` (90 % of the partition),
+  the oldest files leave **one at a time**; a cap of ``RFS_OBS_MAX_FILES` (32)
+  files also bounds growth. Never a full format, and **scanning never stops**
+  because the journal is full.
+- **De-duplication**: a `s_seen` table of 128 MACs in RAM; a device becomes
+  "new" again after `rediscover_min` minutes of absence.
+- **Blacklist**: MACs ignored at write time, added and removed from the UI,
+  persisted in NVS (`bl_` plus an index `bl_idx`), cache of 64 entries.
+- **Sorting and filtering on demand**: keys `date`, `mac`, `ssid`, `rssi`, `tsq`,
+  `type`, ascending or descending, with a time-range filter.
+- **Export**: sequential read of every segment into a single CSV stream in WiGLE
+  format, without ever loading the journal into memory.
 
-### 5.4 Configuration (`config.h`, en NVS)
+### 5.4 Configuration (`config.h`, in NVS)
 
-`app_config_t` regroupe : Wi-Fi (SSID et clé), WebUI (utilisateur et mot de
-passe), WiGLE (nom d'API et token), AP de secours (SSID et mot de passe),
-latitude/longitude, `min_rssi`, `mqtt_min_rssi`, `rediscover_min`,
-`scan_wifi`, `scan_ble`, `scan_autostart`, `ui_lang`, MQTT (activation,
-broker, port, utilisateur, mot de passe, sujet, identifiant, TLS), NTP (serveur et
-fuseau) et `device_id`.
+``app_config_t` groups: Wi-Fi (SSID and key), WebUI (user and password), WiGLE
+(API name and token), rescue AP (SSID and password), latitude/longitude,
+``min_rssi`, ``mqtt_min_rssi`, ``rediscover_min`, ``scan_wifi`,
+``scan_ble`, ``scan_autostart`, ``ui_lang`, MQTT (enable, broker, port,
+user, password, topic, client id, TLS), NTP (server and timezone) and
+``device_id`.
 
-Règles :
+Rules:
 
-- `config_needs_password_change()` renvoie vrai tant que les identifiants valent
-  `admin`/`admin` ; l'interface force alors le changement.
-- `config_has_password()`, `config_has_token()` et `config_has_ap_password()` ne
-  renvoient que des booléens, **jamais la valeur**.
-- Le token WiGLE n'est jamais relu par l'interface après enregistrement : six
-  champs sensibles affichent huit points, et un œil permet de les remplacer, jamais
-  de les retrouver.
-- `config_save_time_ref()` limite l'écriture de la référence d'horloge à une fois
-  par heure pour ménager la flash.
+- ``config_needs_password_change()` returns true while the credentials are still
+  `admin`/`admin`; the interface then forces the change.
+- ``config_has_password()`, ``config_has_token()` and
+  ``config_has_ap_password()` return booleans only, **never the value**.
+- The WiGLE token is never read back by the interface after saving: six sensitive
+  fields show eight dots, and an eye icon lets you replace them, never recover them.
+- ``config_save_time_ref()` limits the clock-reference write to once an hour to
+  spare the flash.
 
 ---
 
-## 6. API Web (`web.c`)
 
-Serveur `esp_http_server`, réponses JSON via cJSON. `httpd_start` retourne un
-`esp_err_t` **vérifié**, et `max_uri_handlers` est dimensionné à 29 pour les 28
-gestionnaires répartis sur 27 routes.
+## 6. Web API (`web.c`)
 
-Toutes les routes exigent une session, sauf `/api/login`. La session est un cookie
-`sid` en `HttpOnly`, `SameSite=Strict`, `Path=/`, `Max-Age=3600`. Trois échecs
-d'affilée — par la route de connexion ou par le repli HTTP Basic — provoquent une
-temporisation de 30 s.
+``esp_http_server`, JSON responses through cJSON. ``httpd_start` returns an
+``esp_err_t` that **is checked**, and `max_uri_handlers` is sized to 29 for the
+28 handlers spread over 27 routes.
 
-| Méthode | Route | Rôle |
+Every route requires a session except `/api/login`. The session is a `sid` cookie
+set `HttpOnly`, `SameSite=Strict`, `Path=/`, `Max-Age=3600`. Three failures in a
+row — through the login route or through the HTTP Basic fallback — trigger a 30-second
+lockout.
+
+| Method | Route | Purpose |
 |---|---|---|
-| GET | `/` | interface Web (HTML embarqué) |
-| GET | `/logo/rfsentinel-logo.svg` | logo (embarqué) |
-| GET | `/logo/rfsentinel-icon.svg` | icône (embarquée) |
-| POST | `/api/login` | connexion `{user, pass}` → cookie de session |
-| POST | `/api/logout` | déconnexion |
-| GET | `/api/config` | lecture de la config, secrets masqués |
-| POST | `/api/config` | mise à jour par fusion partielle, validation interne |
-| GET | `/api/scan/status` | mode, IP, heure et qualité, version, compteurs, occupation du journal, état MQTT, diagnostics de scan |
-| POST | `/api/scan/start` | démarrer les scans |
-| POST | `/api/scan/stop` | arrêter les scans |
-| GET | `/api/observations` | liste paginée — `page`, `type`, `sort`, `dir`, `cursor`, `from`, `to` |
-| GET | `/api/history` | 10 apparitions locales les plus récentes d'une MAC (`mac`) |
-| GET | `/api/presence` | appareils surveillés, sujet MQTT et durée d'absence |
-| POST | `/api/presence` | ajouter ou retirer un appareil surveillé (`action`, `mac`, `label`) |
-| GET | `/api/blacklist` | liste des exclusions |
-| POST | `/api/blacklist/add` | ajouter une exclusion `{mac, label}` |
-| POST | `/api/blacklist/remove` | retirer une exclusion `{mac}` |
-| POST | `/api/wigle/upload` | déclencher l'upload manuel du journal vers WiGLE |
-| GET | `/api/wigle/upload/status` | progression et résultat de l'upload |
-| GET | `/api/wigle` | ce que WiGLE connaît d'une MAC (`mac`, `type`) |
-| POST | `/api/purge` | purge par plage de dates `{from, to}` |
-| GET | `/api/purge/status` | progression de la purge |
-| GET | `/api/calibration` | état de la mesure en cours |
+| GET | `/` | web interface (embedded HTML) |
+| GET | `/logo/rfsentinel-logo.svg` | logo (embedded) |
+| GET | `/logo/rfsentinel-icon.svg` | icon (embedded) |
+| POST | `/api/login` | login `{user, pass}` → session cookie |
+| POST | `/api/logout` | logout |
+| GET | `/api/config` | read configuration, secrets masked |
+| POST | `/api/config` | partial-merge update, validated internally |
+| GET | `/api/scan/status` | mode, IP, time and quality, version, counters, journal usage, MQTT state, scan diagnostics |
+| POST | `/api/scan/start` | start scanning |
+| POST | `/api/scan/stop` | stop scanning |
+| GET | `/api/observations` | paginated list — `page`, `type`, `sort`, `dir`, `cursor`, `from`, `to` |
+| GET | `/api/history` | 10 most recent local appearances of a MAC (`mac`) |
+| GET | `/api/presence` | watched devices, MQTT topic and absence duration |
+| POST | `/api/presence` | add or remove a watched device (`action`, `mac`, `label`) |
+| GET | `/api/blacklist` | list of exclusions |
+| POST | `/api/blacklist/add` | add an exclusion `{mac, label}` |
+| POST | `/api/blacklist/remove` | remove an exclusion `{mac}` |
+| POST | `/api/wigle/upload` | trigger the manual journal upload to WiGLE |
+| GET | `/api/wigle/upload/status` | upload progress and result |
+| GET | `/api/wigle` | what WiGLE knows about a MAC (`mac`, `type`) |
+| POST | `/api/purge` | purge by date range `{from, to}` |
+| GET | `/api/purge/status` | purge progress |
+| GET | `/api/calibration` | state of the running measurement |
 | POST | `/api/calibration` | `start`, `stop`, `apply`, `find_start`, `find_next` |
-| GET | `/api/calibration/find` | candidats BLE repérés pendant la recherche |
-| GET | `/api/export` | export CSV du journal (`from`, `to`) en pièce jointe |
-| GET | `/api/time` | heure courante et qualité d'horodatage |
-| POST | `/api/time` | réglage de l'horloge depuis l'heure du navigateur |
+| GET | `/api/calibration/find` | BLE candidates found during a hunt |
+| GET | `/api/export` | CSV export of the journal (`from`, `to`) as an attachment |
+| GET | `/api/time` | current time and timestamp quality |
+| POST | `/api/time` | set the clock from the browser's time |
 
-Détails utiles :
+Useful details:
 
-- `/api/observations` renvoie 10 lignes par page ; un `type` autre que `wifi` ou
-  `ble` est refusé par `bad_type`.
-- `/api/export` exige `from` et `to` en epoch, refuse les bornes invalides ou
-  inversées, et répond en `text/csv` avec `Content-Disposition: attachment` et
-  `Cache-Control: no-store`.
-- `/api/scan/status` expose aussi les tentatives et échecs de scan Wi-Fi, le canal
-  exploré et l'âge du dernier cycle : c'est ce qui a permis de diagnostiquer un
-  scan muet depuis l'interface.
-- Les routes en POST sont déclarées en `HTTP_POST`. Les corps sont lus avec un
-  plafond de 4096 octets.
-- `/api/presence` est la seule route déclarée deux fois, en GET et en POST,
-  d'où 28 gestionnaires pour 27 chemins distincts.
-- L'upload travaille en arrière-plan sur tous les fichiers du journal et agrège les
-  résultats ; l'interface suit l'avancement par `/api/wigle/upload/status`.
+- `/api/observations` returns 10 rows per page; a `type` other than `wifi` or
+  `ble` is rejected with `bad_type`.
+- `/api/export` requires `from` and `to` as epoch seconds, refuses invalid or
+  inverted bounds, and answers `text/csv` with `Content-Disposition: attachment`
+  and `Cache-Control: no-store`.
+- `/api/scan/status` also exposes Wi-Fi scan attempts and failures, the channel
+  being probed and the age of the last cycle: that is what made it possible to
+  diagnose a silent scan from the interface.
+- POST routes are declared as `HTTP_POST`. Bodies are read with a 4096-byte cap.
+- `/api/presence` is the only route declared twice, once for GET and once for POST,
+  which gives 28 handlers for 27 distinct paths.
+- Upload works in the background across every journal file and aggregates the
+  results; the interface follows progress through `/api/wigle/upload/status`.
 
 ---
 
 ## 7. WebUI (`ui/index.html`)
 
-SPA mono-fichier embarquée par `EMBED_FILES`, sans aucune dépendance JavaScript
-externe. Bilingue FR/EN avec persistance locale du choix, **thèmes clair et
-sombre** basculés par bouton et mémorisés en `localStorage` sous la clé
-`rfs-theme` ; le thème sombre est celui par défaut.
+Single-file SPA embedded through `EMBED_FILES`, with no external JavaScript
+dependency. Bilingual FR/EN with the choice stored locally, **light and dark
+themes** switched by a button and remembered in `localStorage` under the key
+`rfs-theme`; dark is the default.
 
-Vues et cartes :
+Views and cards:
 
-- **Connexion** — identifiants, changement de mot de passe imposé au premier
-  lancement, message explicite pendant la temporisation anti-force-brute.
-- **État** — mode réseau, IP, version, heure locale avec l'UTC en infobulle,
-  dernière synchronisation, compteurs Wi-Fi et BLE réellement lus dans le journal,
-  occupation du stockage, état MQTT, diagnostics de scan, bouton de réglage de
-  l'heure.
-- **Observations** — liste paginée de 10 lignes, tri par colonne, filtre Wi-Fi/BLE,
-  filtre par plage de dates en heure locale, ligne cliquable.
-- **Historique de l'équipement** — présences connues de WiGLE pour la MAC cliquée,
-  dans l'ordre chronologique, avec un point sur la carte à droite.
-- **Carte** — `<canvas>` dessinée à la main : quadrillage de secours, puis
-  assemblage de vraies tuiles OpenStreetMap
-  (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`, 256 px) quand le poste a
-  accès à Internet. Zoom calculé depuis l'étalement réel du nuage de points et
-  borné entre 6 et 17 ; projection relative aux bornes du nuage, correction de la
-  longitude selon la latitude, cercle de précision autour du point sélectionné,
-  recalage sur la taille affichée et la densité de l'écran.
-- **Configuration** — Wi-Fi, AP de secours, position, seuils, options de scan,
-  langue, WiGLE, MQTT, NTP, fuseau et identifiant d'appareil. Les six champs
-  sensibles sont masqués, avec un œil pour les remplacer.
-- **Géocodage** — recherche d'adresse vers la base adresse nationale
-  (`https://data.geopf.fr/geocodage/search`) pour remplir latitude et longitude.
-- **Export** — téléchargement de tout le journal ou d'une plage, en CSV WiGLE prêt
-  à renvoyer sur wigle.net.
-- **Purge** — suppression par plage de dates avec confirmation explicite et suivi
-  de progression ; rien n'est effacé à l'aveugle.
-- **Calibration BLE** — mesure de force d'un équipement à trois positions pour en
-  déduire un seuil, puis application du seuil obtenu ; recherche d'un émetteur
-  proche par comparaison de trois relevés, avec liste de candidats.
-- **Équipements exclus** — blacklist avec libellé.
-- **Alertes de présence** — adresses MAC surveillées avec libellé, sujet MQTT
-  et durée d'absence réglables.
-- **Upload WiGLE** — bouton, confirmation, statut intermédiaire, résultat ;
-  déconnexion accessible dans le bandeau.
+- **Login** — credentials, forced password change on first launch, explicit message
+  during the anti brute-force lockout.
+- **Status** — network mode, IP, version, local time with UTC in a tooltip, last
+  synchronisation, Wi-Fi and BLE counters really read from the journal, storage
+  usage, MQTT state, scan diagnostics, time-set button.
+- **Observations** — paginated list of 10 rows, column sorting, Wi-Fi/BLE filter,
+  date-range filter in local time, clickable rows.
+- **Device history** — presences known to WiGLE for the clicked MAC, in
+  chronological order, with a point on the map to the right.
+- **Map** — hand-drawn `<canvas>`: fallback grid, then real OpenStreetMap tiles
+  assembled (`https://tile.openstreetmap.org/{z}/{x}/{y}.png`, 256 px) when the
+  workstation has Internet. Zoom computed from the real spread of the point cloud
+  and clamped between 6 and 17; projection relative to the cloud bounds, longitude
+  correction by latitude, accuracy circle around the selected point, rescaling to
+  the displayed size and screen density.
+- **Configuration** — Wi-Fi, rescue AP, position, thresholds, scan options,
+  language, WiGLE, MQTT, NTP, timezone and device identifier. The six sensitive
+  fields are masked, with an eye icon to replace them.
+- **Geocoding** — address lookup against the French national address base
+  (`https://data.geopf.fr/geocodage/search`) to fill latitude and longitude.
+- **Export** — download of the whole journal or of a range, as WiGLE CSV ready to
+  send back to wigle.net.
+- **Purge** — deletion by date range with explicit confirmation and progress
+  tracking; nothing is erased blindly.
+- **BLE calibration** — signal measurement of a device at three positions to derive
+  a threshold, then application of the resulting threshold; hunt for a nearby
+  transmitter by comparing three readings, with a candidate list.
+- **Excluded devices** — blacklist with labels.
+- **Presence alerts** — watched MAC addresses with label, adjustable MQTT topic and
+  absence duration.
+- **WiGLE upload** — button, confirmation, intermediate status, result; logout is
+  reachable in the banner.
 
-La carte ne charge **aucune** librairie de cartographie : tout le rendu est local,
-ce qui la fait fonctionner même en mode AP sans Internet, sur la grille de secours.
+The map loads **no** mapping library at all: every rendering is local, which is
+what makes it work in AP mode without Internet, on the fallback grid.
 
 ---
 
+
 ## 8. MQTT (`mqtt.c`)
 
-- `esp-mqtt` ; broker, port, utilisateur, mot de passe, sujet, identifiant client
-  et TLS configurables. Démarré au lancement, pas seulement après un enregistrement
-  de configuration.
-- `mqtt_on_obs(obs)` est appelée par le scanner **après enregistrement**. Elle
-  filtre sur `mqtt_min_rssi`, applique la déduplication avec `rediscover_min`,
-  puis publie en **QoS 1, sans retain**.
-- Vérification et publication se font dans la même section critique, parce que les
-  rappels BLE et la tâche Wi-Fi arrivent en parallèle.
-- Charge utile, plafonnée à 384 octets :
+- `esp-mqtt`; broker, port, user, password, topic, client id and TLS configurable.
+  Started at boot, not only after saving the configuration.
+- ``mqtt_on_obs(obs)` is called by the scanner **after recording**. It filters on
+  ``mqtt_min_rssi`, applies de-duplication with ``rediscover_min`, then
+  publishes at **QoS 1, no retain**.
+- Checking and publishing happen inside the same critical section, because BLE
+  callbacks and the Wi-Fi task arrive in parallel.
+- Payload, capped at 384 bytes:
 
 ```json
 {"device_id":"…","mac":"…","type":"WIFI","ssid":"…","rssi":-72,
  "ts":"2026-11-11 10:50:10","tsq":"NTP_SYNCED","lat":48.85660,"lon":2.35222}
 ```
 
-`tsq` donne la qualité de l'horodatage et prend trois valeurs : `NTP_SYNCED`,
-`ESTIMATED` — l'heure repart d'une référence antérieure, sans revalidation — et
-`UNKNOWN` quand l'appareil n'a aucune idée de l'heure, `ts` valant alors `"0"`. Un
-consommateur peut ainsi écarter les messages mal horodatés.
+`tsq` gives the timestamp quality and takes three values: `NTP_SYNCED`,
+`ESTIMATED` — the clock restarts from an earlier reference, without revalidation —
+and `UNKNOWN` when the device has no idea of the time, in which case `ts` is
+`"0"`. A consumer can therefore discard badly timestamped messages.
 
 ---
 
-### 8.1 Équipements surveillés (`presence.c`)
+### 8.1 Watched devices (`presence.c`)
 
-`presence.c` tient une liste de 32 adresses MAC et leur libellé, persistée dans un
-espace NVS qui lui est propre (`rfs_presence`). La surveillance est indépendante
-des seuils d'enregistrement et de la liste des exclusions :
+`presence.c` keeps a list of 32 MAC addresses and their labels, persisted in its own
+NVS namespace (`rfs_presence`). Watching is independent of the recording thresholds
+and of the exclusion list:
 
-- côté Wi-Fi, `presence_on_obs()` est appelée **avant** le test d'exclusion et
-  avant tout filtrage sur le signal ;
-- côté BLE, `presence_matches()` est consultée avant les filtres, sans quoi un
-  appareil surveillé serait écarté sur un signal faible ; l'observation est alors
-  transmise même si elle n'est pas journalisée ;
-- le premier relevé déclenche une alerte quel que soit le niveau de signal ; une
-  alerte de retour n'est émise qu'après une absence d'au moins `absence_s`
-  (120 s par défaut, 30 s minimum), avec nouvelle tentative au plus toutes les 5 s ;
-- `mqtt_presence_publish()` publie en QoS 1 sur un sujet dédié, jamais le sujet des
-  alertes : la configuration refuse que les deux soient identiques.
+- on the Wi-Fi side, ``presence_on_obs()` is called **before** the exclusion test
+  and before any signal filtering;
+- on the BLE side, ``presence_matches()` is consulted before the filters,
+  otherwise a watched device would be dropped for a weak signal; the observation is
+  then forwarded even when it is not journalled;
+- the first reading triggers an alert whatever the signal level; a return alert is
+  only sent after an absence of at least `absence_s` (120 s by default, 30 s
+  minimum), with a new attempt at most every 5 s;
+- ``mqtt_presence_publish()` publishes at QoS 1 on a dedicated topic, never the
+  alerts topic: the configuration refuses both names being identical.
 
-Charge utile, plafonnée à 512 octets :
+Payload, capped at 512 bytes:
 
 ```json
 {"event":"presence","device_id":"…","mac":"…","type":"BLE","label":"…",
  "ssid":"…","rssi":-71,"ts":"2026-11-11 10:50:10","tsq":"NTP_SYNCED"}
 ```
 
-`label` reprend le libellé saisi dans l'interface, pour qu'un consommateur
-distingue plusieurs appareils surveillés sans connaître les adresses MAC.
+`label` carries the label entered in the interface, so a consumer can tell several
+watched devices apart without knowing their MAC addresses.
 
 ---
 
-### 8.2 Interfaçage avec Home Assistant
+### 8.2 Connecting with Home Assistant
 
-RFSentinel se comporte comme un client MQTT ordinaire : il **publie**, il n'écoute
-rien et n'expose aucun point d'entrée. Un domotique connecté au même broker —
-Home Assistant par son intégration MQTT, Node-RED, openHAB ou un script — **écoute**
-le topic qui l'intéresse et décide de ce qu'il en fait. Rien n'est spécifique à
-RFSentinel côté consommateur.
+RFSentinel behaves like an ordinary MQTT client: it **publishes**, it listens to
+nothing and exposes no entry point. A home automation system connected to the same
+broker — Home Assistant through its MQTT integration, Node-RED, openHAB or a script —
+**listens** to the topic it cares about and decides what to do with it. Nothing on
+the consumer side is specific to RFSentinel.
 
-| Topic par défaut | Déclencheur | Champs utiles |
+| Default topic | Trigger | Useful fields |
 |---|---|---|
-| `/rfsentinel/alert` | nouvel équipement journalisé | `type`, `mac`, `ssid`, `rssi`, `ts`, `tsq`, `lat`, `lon` |
-| `/rfsentinel/presence` | apparition ou retour d'un équipement surveillé | `event`, `label`, `type`, `mac`, `ssid`, `rssi`, `ts`, `tsq` |
+| `/rfsentinel/alert` | new device journalled | `type`, `mac`, `ssid`, `rssi`, `ts`, `tsq`, `lat`, `lon` |
+| `/rfsentinel/presence` | watched device appears or returns | `event`, `label`, `type`, `mac`, `ssid`, `rssi`, `ts`, `tsq` |
 
-Les deux sujets se renommement dans la page de configuration et ne peuvent pas
-porter le même nom (§8.1). Les deux publications sont en QoS 1, sans retain : un
-consommateur éteint ne reçoit pas rattrapage à sa reconnexion.
+Both topics can be renamed on the configuration page and cannot carry the same name
+(§8.1). Both publications are QoS 1 with no retain: a consumer that was switched off
+gets no catch-up when it reconnects.
 
-Dans Home Assistant, l'automatisation se construit sur le déclencheur
-**« Lorsqu'un message MQTT a été reçu »**, avec le topic à écouter. L'action est
-ensuite libre : notification persistante, envoi vers un téléphone, allumage d'une
-lumière, message vocal. Les champs du JSON se relisent dans un modèle via
-`trigger.payload_json` :
+In Home Assistant, the automation is built on the **"When an MQTT message has been
+received"** trigger, with the topic to listen to. The action is then free: persistent
+notification, push to a phone, switching on a light, spoken message. The JSON fields
+are read back in a template through `trigger.payload_json`:
 
 ```yaml
-{{ trigger.payload_json.type }} détecté — SSID : {{ trigger.payload_json.ssid or 'inconnu' }} — MAC : {{ trigger.payload_json.mac }} — RSSI : {{ trigger.payload_json.rssi }} dBm
+{{ trigger.payload_json.type }} detected — SSID: {{ trigger.payload_json.ssid or 'unknown' }} — MAC: {{ trigger.payload_json.mac }} — RSSI: {{ trigger.payload_json.rssi }} dBm
 ```
 
-Deux champs appellent une condition explicite dans l'automatisation.
+Two fields deserve an explicit condition in the automation.
 
-`rssi` se comporte différemment selon le topic. Sur `/rfsentinel/alert` c'est
-toujours un nombre, mais un équipement BLE y figure avec 127 lorsque le signal n'a
-pas été mesuré : un seuil du type « RSSI supérieur à -80 » écarterait donc ces
-équipements par accident. Sur `/rfsentinel/presence` le même cas s'écrit `null`,
-et un modèle qui affiche le champ sans filtre produit alors « dBm » sans nombre.
+`rssi` behaves differently depending on the topic. On `/rfsentinel/alert` it is
+always a number, but a BLE device appears there with 127 when the signal was not
+measured: a threshold such as "RSSI above -80" would therefore exclude those devices
+by accident. On `/rfsentinel/presence` the same case is written `null`, and a
+template that prints the field without a filter then produces "dBm" with no number.
 
-`tsq` vaut `NTP_SYNCED`, `ESTIMATED` ou `UNKNOWN`, et permet d'écarter les
-messages émis avant synchronisation de l'heure : dans ce dernier cas `ts` vaut
-`"0"`, ce qui fausse une automatisation fondée sur l'heure au premier démarrage.
+`tsq` is `NTP_SYNCED`, `ESTIMATED` or `UNKNOWN`, and lets you discard messages sent
+before the clock is synchronised: in the last case `ts` is `"0"`, which skews any
+time-based automation on first boot.
 
-Le topic de présence ne parle que quand un équipement surveillé apparaît ou
-réapparaît : après une absence d'au moins `absence_s`, son retour déclenche une
-nouvelle publication, et rien n'est émis pendant l'absence (§8.1). Il n'existe pas
-de message de départ. Une automatisation qui doit réagir à une disparition —
-éteindre une lumière quand le téléphone quitte le logement — ne peut donc pas
-l'attendre de RFSentinel : elle allume sur le message reçu et s'éteint elle-même
-après un délai, `for:` en anglais, supérieur à la période de redetection radio.
+The presence topic only speaks when a watched device appears or reappears: after an
+absence of at least `absence_s`, its return triggers a new publication, and nothing
+is published during the absence (§8.1). There is no departure message. An automation
+that must react to a disappearance — switching a light off when the phone leaves the
+flat — cannot expect that from RFSentinel: it switches on when the message arrives
+and turns itself off after a `for:` duration longer than the radio rediscovery
+period.
 
 ---
 
 ## 9. WiGLE (`wigle.c`)
 
-Cinq points d'entrée de l'API v2 sont utilisés, tous en **HTTPS** avec le bundle CA
-complet et une authentification **Basic** (nom d'API + token) :
+Five entry points of API v2 are used, all over **HTTPS** with the full CA bundle and
+**Basic** authentication (API name + token):
 
-| Usage | URL |
+| Purpose | URL |
 |---|---|
 | Upload | `https://api.wigle.net/api/v2/file/upload` |
-| Recherche Wi-Fi | `https://api.wigle.net/api/v2/network/search` |
-| Recherche Bluetooth | `https://api.wigle.net/api/v2/bluetooth/search` |
-| Détail Wi-Fi | `https://api.wigle.net/api/v2/network/detail` |
-| Détail Bluetooth | `https://api.wigle.net/api/v2/bluetooth/detail` |
+| Wi-Fi search | `https://api.wigle.net/api/v2/network/search` |
+| Bluetooth search | `https://api.wigle.net/api/v2/bluetooth/search` |
+| Wi-Fi detail | `https://api.wigle.net/api/v2/network/detail` |
+| Bluetooth detail | `https://api.wigle.net/api/v2/bluetooth/detail` |
 
-Points vérifiés en direct contre l'API, après des échecs répétés :
+Points verified live against the API, after repeated failures:
 
-- le paramètre d'adresse s'appelle **`netid`** dans les deux tables ; `mac`,
-  `bdaddr` et `bssid` n'existent pas et provoquent des erreurs 400 ;
-- le nombre de lignes se demande avec **`resultsPerPage`** ;
-- la position d'une recherche simple est **`trilat` / `trilong`**, et non `lat` /
-  `lon` — une recherche qui aboutissait laissait la carte vide ;
-- les positions datées viennent des points d'entrée **`detail`** :
-  `network/detail` renvoie `locationData[]` (`latitude`, `longitude`, `time`,
-  `signal`, `accuracy`) et `bluetooth/detail` renvoie
-  `locationClusters[].locations[]` avec les mêmes champs ; sans point détaillé, la
-  position trilatérale d'en-tête est reprise avec la période couverte ;
-- un `401` est traduit en `RFS_ERR_WIGLE_AUTH` pour que l'interface parle
-  d'identifiants refusés plutôt que d'équipement introuvable.
+- the address parameter is called **`netid`** in both tables; `mac`, `bdaddr` and
+  `bssid` do not exist and cause 400 errors;
+- the number of rows is requested with **`resultsPerPage`**;
+- the position of a simple search is **`trilat` / `trilong`**, not `lat` / `lon` —
+  a search that succeeded still left the map empty;
+- dated positions come from the **`detail`** endpoints: `network/detail` returns
+  `locationData[]` (`latitude`, `longitude`, `time`, `signal`, `accuracy`) and
+  `bluetooth/detail` returns `locationClusters[].locations[]` with the same fields;
+  without a detail point, the trilateration position from the header is reused with
+  the covered period;
+- a `401` is translated into `RFS_ERR_WIGLE_AUTH` so the interface talks about
+  rejected credentials rather than an unknown device.
 
-Contraintes mémoire, imposées par l'absence de PSRAM : tampon de corps de 6 Ko, 32
-lignes maximum, tableau de lignes alloué une seule fois pour toute la recherche au
-lieu d'un bloc par requête, et libérations sur toutes les sorties anticipées. Le
-tas libre est journalisé avant et après une recherche pour permettre un diagnostic
-sur la carte.
+Memory constraints, imposed by the absence of PSRAM: 6 KB body buffer, 32 rows
+maximum, the row array allocated once for the whole search instead of one block per
+request, and frees on every early exit. The free heap is logged before and after a
+search so it can be diagnosed on the board.
 
-Ces précautions ne suffisent pas tant que l'écran est allumé : le framebuffer du
-panneau occupe le plus gros bloc de RAM interne et bloque l'ouverture de la session
-TLS. Le plus gros bloc disponible n'est rendu que par l'extinction automatique, une
-minute après la mise sous tension (§11.5). Une recherche WiGLE lancée avant ce
-moment peut échouer par manque de mémoire : la recherche s'arrête sur
-`ESP_ERR_NO_MEM` et répond `error:nomem`, ce qui se distingue d'une adresse
-absente chez WiGLE.
+Those precautions are not enough while the screen is on: the panel framebuffer takes
+the largest internal RAM block and blocks the TLS session from opening. The largest
+available block only appears once the automatic switch-off happens, one minute after
+power-on (§11.5). A WiGLE search started before that moment can fail for lack of
+memory: the search stops on `ESP_ERR_NO_MEM` and answers `error:nomem`, which is
+distinguishable from an address WiGLE does not know.
 
-L'upload se fait en POST multipart avec une boundary dédiée, **uniquement** sur clic
-de l'utilisateur. Le nom d'API et le token ne sortent jamais de l'appareil.
+Upload is a POST multipart with a dedicated boundary, triggered **only** by a user
+click. The API name and the token never leave the device.
 
 ---
 
-## 10. Réseau et horloge (`net.c`)
 
-### 10.1 Deux modes, un seul objectif : ne jamais perdre de données
+## 10. Network and clock (`net.c`)
 
-L'appareil tente d'abord de rejoindre le réseau Wi-Fi enregistré. Cet essai est
-borné : `STA_CONNECT_TIMEOUT_MS` (8 s) par tentative, `STA_MAX_RETRY` (4)
-tentatives au total. Au-delà, il bascule en point d'accès `RFSentinel-Setup` (mot
-de passe `012345678`, interface `192.168.4.1`) et l'interface reste joignable
-depuis un téléphone ou un ordinateur.
+### 10.1 Two modes, one goal: never lose data
 
-Le point important est que le basculement n'interrompt pas la collecte : les scans
-continuent et le journal s'écrit aussi bien en point d'accès qu'en mode client. Un
-équipement posé dans un lieu sans réseau disponible remplit donc son journal,
-qu'il sera possible de consulter ou de faire remonter plus tard.
+The device first tries to join the stored Wi-Fi network. That attempt is bounded:
+`STA_CONNECT_TIMEOUT_MS` (8 s) per attempt, `STA_MAX_RETRY` (4) attempts in total.
+Beyond that it switches to the access point `RFSentinel-Setup` (password
+`012345678`, address `192.168.4.1`) and the interface stays reachable from a phone
+or a computer.
 
-### 10.2 Boucle non bloquante
+The important point is that the switch does not interrupt collection: scanning
+continues and the journal is written just as well in access-point mode as in client
+mode. A dongle placed somewhere with no available network therefore fills its
+journal, which can be read or uploaded later.
 
-`net_tick()` est appelée régulièrement par la boucle principale. Elle avance l'état
-du réseau par petits pas — une tentative de connexion, une vérification de délai,
-une requête NTP — sans jamais bloquer. Une connexion Wi-Fi qui traîne ou un
-serveur NTP injoignable ne suspend donc ni l'écran, ni l'interface, ni les scans.
+### 10.2 Non-blocking loop
 
-### 10.3 L'horloge et sa qualité
+``net_tick()` is called regularly by the main loop. It advances the network state
+in small steps — one connection attempt, one timeout check, one NTP request — without
+ever blocking. A slow Wi-Fi association or an unreachable NTP server therefore
+suspends neither the screen, nor the interface, nor the scans.
 
-Un horodatage sans référence de temps ne vaut rien pour une cartographie. L'appareil
-connaît donc trois états, enregistrés à chaque observation :
+### 10.3 The clock and its quality
 
-| Qualité | Signification | Source |
+A timestamp without a time reference is worthless for mapping. The device therefore
+knows three states, recorded with every observation:
+
+| Quality | Meaning | Source |
 |---|---|---|
-| `TS_UNKNOWN` | temps non réglé | aucune source exploitable |
-| `TS_ESTIMATED` | temps reconstruit | `FALLBACK_EPOCH` (2025-01-01 UTC) + durée de marche |
-| `TS_NTP_SYNCED` | temps vérifié | serveur NTP |
+| `TS_UNKNOWN` | time not set | no usable source |
+| `TS_ESTIMATED` | time reconstructed | `FALLBACK_EPOCH` (2025-01-01 UTC) + uptime |
+| `TS_NTP_SYNCED` | time verified | NTP server |
 
-Le troisième état n'est jamais simulé. Si l'heure est réglée depuis le navigateur —
-route `POST /api/time`, qui transmet l'heure locale et le décalage — la qualité
-passe à `TS_ESTIMATED` et non à `TS_NTP_SYNCED` : l'information vient du poste de
-l'utilisateur, pas d'une source de temps reconnue. Cette distinction se retrouve
-dans l'export, où le champ `comment` signale les observations à temps estimé.
+The third state is never simulated. If the time is set from the browser — route
+`POST /api/time`, which sends local time and the offset — the quality becomes
+`TS_ESTIMATED` and not `TS_NTP_SYNCED`: the information comes from the user's
+workstation, not from a recognised time source. This distinction reappears in the
+export, where the `comment` field flags observations with estimated time.
 
-Un réglage manuel est conservé en mémoire non volatile toutes les
-`TIME_REF_SAVE_INTERVAL_S` (3 600 s), ce qui permet de retrouver une heure cohérente
-après un redémarrage sans réseau. Le serveur NTP par défaut est `pool.ntp.org` et
-le fuseau `CET-1CEST,M3.5.0,M10.5.0/3`, tous deux modifiables. Une
-resynchronisation est tentée toutes les `NTP_RESYNC_INTERVAL_S` (6 h).
+A manual setting is kept in non-volatile storage every
+`TIME_REF_SAVE_INTERVAL_S` (3,600 s), which makes it possible to recover a coherent
+time after a restart without network. The default NTP server is `pool.ntp.org` and
+the timezone `CET-1CEST,M3.5.0,M10.5.0/3`, both editable. A resynchronisation is
+attempted every `NTP_RESYNC_INTERVAL_S` (6 h).
 
-### 10.4 Affichage de l'heure
+### 10.4 Displaying the time
 
-L'heure réglée est stockée en UTC. Les affichages de l'interface — dernière
-synchronisation, heures des observations — passent par `net_time_local` et
-`net_last_sync_local`, qui appliquent le fuseau configuré. Une conversion faite
-avec `gmtime_r` affichait une heure décalée d'une heure par rapport à l'heure
-locale réelle ; le journal, l'export CSV et les messages MQTT restent, eux, en UTC,
-ce qui est le comportement attendu pour des données destinées à être traitées
-ailleurs.
+The set time is stored in UTC. Interface displays — last synchronisation, observation
+times — go through `net_time_local` and `net_last_sync_local`, which apply the
+configured timezone. A conversion done with `gmtime_r` displayed a time one hour off
+from the real local time; the journal, the CSV export and the MQTT messages stay in
+UTC, which is the expected behaviour for data meant to be processed elsewhere.
 
 ---
 
-## 11. Écran (`display.c`)
+## 11. Screen (`display.c`)
 
-### 11.1 Contrainte matérielle
+### 11.1 Hardware constraint
 
-L'écran fait 160 × 80 pixels et n'affiche qu'une couleur effective, mais le
-contrôleur ST7735 attend des pixels RV565 : le framebuffer fait donc
-`160 × 80 × 2 = 25 600 octets`. Il est alloué par `heap_caps_malloc()` avec les
-drapeaux `MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL`, parce que le transfert SPI
-exige une mémoire accessible au DMA et que la carte n'a pas de PSRAM. C'est le
-plus gros bloc de RAM interne consommé par l'appareil, et il est libéré dès que
-l'écran s'éteint — voir §11.5.
+The screen is 160 × 80 pixels and shows only one effective colour, but the ST7735
+controller expects RGB565 pixels: the framebuffer is therefore
+`160 × 80 × 2 = 25,600 bytes`. It is allocated with `heap_caps_malloc()` and the
+flags `MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL`, because the SPI transfer needs
+DMA-accessible memory and the board has no PSRAM. It is the largest internal RAM
+block the device consumes, and it is released as soon as the screen switches off —
+see §11.5.
 
-### 11.2 Rotation logicielle
+### 11.2 Software rotation
 
-Le contrôleur de la carte est configuré avec `swap_xy(true)`, `mirror(false, true)`
-et un décalage de 26 pixels en X et 1 en Y, ce qui présente l'image tournée de 180°
-par rapport au repère utilisé par le dessin. `rotate_frame()` retourne le
-framebuffer avant l'envoi. Conséquence pratique : les coordonnées utilisées par le
-code de dessin sont bien les coordonnées visibles à l'écran.
+The board's controller is configured with `swap_xy(true)`, `mirror(false, true)` and
+an offset of 26 pixels in X and 1 in Y, which presents the image turned by 180°
+relative to the reference used by the drawing code. ``rotate_frame()` flips the
+framebuffer before sending. Practical consequence: the coordinates used by the
+drawing code are the coordinates visible on screen.
 
-Cette rotation a été ajoutée après un retour matériel — l'image était tête en bas —
-et la correction a été confirmée sur la carte.
+This rotation was added after hardware feedback — the image was upside down — and the
+fix was confirmed on the board.
 
-### 11.3 Écran d'accueil
+### 11.3 Home screen
 
-Le logo, 64 × 64, est collé en haut de l'écran (`y0 = 0`). Le bas reçoit la
-signature `By M3r0W1g`, centrée sous le logo. Les deux tiennent dans la
-hauteur disponible : 64 pixels de logo plus 16 pixels de ligne de texte = 80
-pixels, sans chevauchement ni rognure.
+The logo, 64 × 64, is pasted at the top of the screen (`y0 = 0`). The bottom carries
+the signature `By M3r0W1g`, centred under the logo. Both fit in the available
+height: 64 pixels of logo plus a 16-pixel line of text = 80 pixels, with no overlap
+and no cropping.
 
-### 11.4 Écran de statut
+### 11.4 Status screen
 
-Après l'accueil, l'écran affiche en continu :
+After the home screen, the display shows continuously:
 
-- `RFSentinel v1.0.0` ;
-- l'adresse IP obtenue, ou `Connexion...` tant que le réseau n'est pas prêt ;
-- `Mode: Wi-Fi` ou `Mode: AP` selon le mode réseau actif.
+- `RFSentinel v1.0.0`;
+- the IP address obtained, or `Connexion...` while the network is not ready;
+- `Mode: Wi-Fi` or `Mode: AP` depending on the active network mode.
 
-L'accueil revient au démarrage et pendant `RFS_BOOT_HOLD_MS` (60 s), puis la
-veille prend le relais pour limiter l'échauffement et la consommation. Le
-rétroéclairage est commandé par une broche active à l'état bas.
+The home screen returns at boot and during `RFS_BOOT_HOLD_MS` (60 s), then the
+screensaver takes over to limit heating and consumption. The backlight is driven by
+an active-low pin.
 
-### 11.5 Extinction de l'écran et mémoire récupérée
+### 11.5 Screen off and memory recovered
 
-`display_tick()` compare l'horloge au démarrage et appelle `display_blank()`
-dès que `RFS_BOOT_HOLD_MS` est écoulé, soit **une minute** après la mise sous
-tension. `display_blank()` coupe le panneau (`disp_on_off(false)`), relève la
-broche de rétroéclairage, puis `release_frame()` libère le framebuffer et remet
-le pointeur à `NULL`. La libération n'intervient qu'après la fin du transfert
-SPI en cours, pour ne jamais rendre un tampon pendant une écriture DMA.
+``display_tick()` compares the clock against the boot time and calls
+``display_blank()` as soon as `RFS_BOOT_HOLD_MS` has elapsed, that is **one
+minute** after power-on. ``display_blank()` switches the panel off
+(`disp_on_off(false)`), raises the backlight pin, then ``release_frame()` frees
+the framebuffer and sets the pointer back to `NULL`. The release only happens after
+the SPI transfer in progress has finished, so a buffer is never returned during a DMA
+write.
 
-Ce comportement n'est pas qu'un détail de confort : les 25 600 octets rendus au
-tas interne sont précisément ce qui permet à `wigle.c` d'ouvrir une session TLS
-et de recevoir un corps de réponse. Tant que l'écran reste allumé, la recherche
-WiGLE peut manquer de mémoire contiguë. **Il faut donc attendre l'extinction de
-l'écran avant de consulter l'historique WiGLE d'un équipement.** Le journal série
-trace les deux moments utiles au diagnostic : `tampon ecran libere: libre=…
-bloc_max=…` côté écran, et le tas libre avant/après chaque appel côté WiGLE.
+That behaviour is not a comfort detail: the 25,600 bytes handed back to the internal
+heap are exactly what lets `wigle.c` open a TLS session and receive a response body.
+While the screen stays lit, the WiGLE search can run short of contiguous memory.
+**You therefore have to wait for the screen to switch off before consulting the
+WiGLE history of a device.** The serial log traces both moments useful for
+diagnosis: `tampon ecran libere: libre=… bloc_max=…` on the screen side, and the
+free heap before and after each call on the WiGLE side.
 
-Une fois éteint, l'écran ne se rallume pas : les écrans d'accueil et de statut
-sortent immédiatement si `s_blanked` est vrai. L'appareil revient à l'affichage
-au redémarrage suivant.
+Once off, the screen does not light up again: the home and status screens return
+immediately when `s_blanked` is true. The device returns to displaying on the next
+restart.
 
-Les libellés suivent la langue choisie dans l'interface (français par défaut,
-anglais possible).
+Labels follow the language chosen in the interface (French by default, English
+available).
 
 ---
 
-## 12. Compiler et flasher
 
-### 12.1 Prérequis
+## 12. Build and flash
 
-- [ESP-IDF](https://github.com/espressif/esp-idf) **v5.3.2**, la version avec
-  laquelle le projet est compilé et testé ;
-- une machine de développement Linux ou macOS avec Python 3 ;
-- un port USB pour la carte.
+### 12.1 Prerequisites
 
-Les dépendances matérielles sont récupérées automatiquement au premier
-configuration : le pilote d'écran est présent dans `main/lcd/` et le système de
-fichiers `joltwallet/littlefs` est résolu par le gestionnaire de composants.
+- [ESP-IDF](https://github.com/espressif/esp-idf) **v5.3.2**, the version the project
+  is compiled and tested with;
+- a Linux or macOS development machine with Python 3;
+- a USB port for the board.
 
-### 12.2 Compilation
+Hardware dependencies are fetched automatically on first configuration: the screen
+driver lives in `main/lcd/` and the `joltwallet/littlefs` filesystem is resolved by
+the component manager.
+
+### 12.2 Compiling
 
 ```bash
-. $IDF_PATH/export.sh                # active l'environnement ESP-IDF
-idf.py set-target esp32s3            # une seule fois
-idf.py reconfigure                   # récupère les composants gérés
+. $IDF_PATH/export.sh                # activate the ESP-IDF environment
+idf.py set-target esp32s3            # once only
+idf.py reconfigure                   # fetch managed components
 idf.py build
 ```
 
-Le résultat est `build/rfsentinel.bin`, accompagné de `build/bootloader.bin` et
+The result is `build/rfsentinel.bin`, alongside `build/bootloader.bin` and
 `build/partition-table.bin`.
 
-### 12.3 Flash
+### 12.3 Flashing
+
+The simplest route, straight from a build tree:
 
 ```bash
-idf.py -p /dev/ttyUSB0 flash monitor    # adapter le port à votre machine
+idf.py -p /dev/ttyACM0 flash monitor    # adapt the port to your machine
 ```
 
-Pour flasher les trois images manuellement, en respectant les adresses de la table
-de partitions et les paramètres de la mémoire :
+To write the three images by hand, honouring the partition-table addresses and the
+memory parameters, install esptool first — the full per-system instructions, port
+names and driver notes are in the
+[README](README.md#flashing-with-esptool). In short: on Linux use a virtual
+environment (`python3 -m venv` then `pip install esptool`) and add yourself to the
+`dialout` group; on macOS `brew install esptool`; on Windows `py -m pip install
+esptool`.
+
+esptool 5 spells its options with dashes, and that is the form to type:
 
 ```bash
-esptool.py --chip esp32s3 -p /dev/ttyUSB0 write_flash \
-    --flash_mode dio --flash_freq 80m --flash_size 16MB \
-    0x0 build/bootloader.bin \
-    0x8000 build/partition-table.bin \
-    0x10000 build/rfsentinel.bin
+# Linux
+esptool --chip esp32s3 -p /dev/ttyACM0 -b 460800 --before default-reset --after hard-reset \
+  write-flash --flash-mode dio --flash-freq 80m --flash-size 16MB \
+  0x0 bin/bootloader.bin 0x8000 bin/partition-table.bin 0x10000 bin/rfsentinel.bin
 ```
 
-Les images publiées sur la page des versions de ce dépôt s'installent de la même
-façon, sans avoir à compiler.
+```bash
+# macOS — the port comes from ls /dev/tty.usb*
+esptool --chip esp32s3 -p /dev/tty.usbmodem31401 -b 460800 \
+  --before default-reset --after hard-reset \
+  write-flash --flash-mode dio --flash-freq 80m --flash-size 16MB \
+  0x0 bin/bootloader.bin 0x8000 bin/partition-table.bin 0x10000 bin/rfsentinel.bin
+```
 
-> **Attention au modèle de carte.** La table de partitions suppose 16 Mo de mémoire
-> flash. Une carte de 8 Mo — même boîtier, même apparence — refusera le
-> démarrage. La LilyGO T-Dongle-S3 que vise le projet est bien en 16 Mo, mais il
-> existe des variantes plus petites sur le marché.
+```powershell
+# Windows — same command, backticks for line continuation
+py -m esptool --chip esp32s3 -p COM3 -b 460800 --before default-reset --after hard-reset `
+  write-flash --flash-mode dio --flash-freq 80m --flash-size 16MB `
+  0x0 bin\bootloader.bin 0x8000 bin\partition-table.bin 0x10000 bin\rfsentinel.bin
+```
 
-### 12.4 Flasher depuis le navigateur
+The images published in the `bin/` folder of this repository install the same way,
+with no need to compile.
 
-Le répertoire `webtool/` contient une page autonome qui écrit le firmware par
-l'API Web Serial, sans rien installer côté utilisateur. Elle n'existe que pour
-Chrome et Edge, seuls navigateurs qui exposent le port série, et le navigateur
-n'autorise l'accès que depuis HTTPS, `localhost` ou `file://`.
+If your esptool came with ESP-IDF 5.3 it is version 4.x and expects underscores:
+`write_flash`, `--flash_mode`, `--flash_freq`, `--flash_size`,
+`--before default_reset`, `--after hard_reset`, and the program is named
+`esptool.py`. Those spellings still work on esptool 5, which accepts them with a
+deprecation warning.
 
-Le moteur choisi n'est pas `esp-web-tools`, la solution la plus répandue : ses
-éléments écrivent avec `flashMode`, `flashFreq` et `flashSize` à `keep`,
-c'est-à-dire les réglages déjà présents dans la carte. Or le risque principal du
-projet est une carte de 8 Mo recevant une table de partitions de 16 Mo. Le
-flasher RFSentinel est donc une page propre, posée sur `esptool-js` 0.7.1, qui
-impose `dio`, `80m` et `16MB`, lit la capacité réelle avant d'écrire et
-refuse toute carte plus petite. Le manifeste ne fournit que des URL et des
-empreintes : jamais une adresse ni un réglage mémoire, et les adresses `0x0`,
-`0x8000` et `0x10000` viennent du code de la page.
+> **Check the exact board model before writing to flash.** The partition table
+> assumes 16 MB of flash. An 8 MB board — same case, same look — will refuse to boot.
+> The LilyGO T-Dongle-S3 this project targets does have 16 MB, but smaller variants
+> exist on the market.
 
-La page doit marcher hors ligne, donc sans import de module ES, ce que Chrome
-interdit en `file://`. Le bundle d'esptool-js, livré en modules ES, est converti
-en script classique par `tools/make_webtool_vendor.py` : la clause `export`
-finale devient une affectation à un global, et le résultat est vérifié par
-`node --check`.
+### 12.4 Flashing from the browser
 
-Le mode en ligne lit `webtool/firmware/manifest.json` et les trois images qui le
-suivent, d'où la nécessité de committer ce dossier.
-`tools/package_webtool_firmware.py` le remplit depuis `build/` et refuse de
-copier quoi que ce soit si le build n'annonce pas `esp32s3` en `dio/80m/16MB`.
-Les pièces jointes d'une publication GitHub ne renvoient pas d'autorisation CORS :
-le firmware est donc chargé depuis les fichiers bruts du dépôt ou GitHub Pages,
-qui en renvoient.
+The `webtool/` folder holds a standalone page that writes the firmware through the
+Web Serial API, with nothing to install on the user's side. It only exists for Chrome
+and Edge, the only browsers that expose the serial port, and the browser only allows
+access from HTTPS, `localhost` or `file://`.
 
-Après l'écriture, esptool-js relit l'empreinte MD5 de la flash et la compare à
-celle de l'image envoyée ; c'est la page qui fournit cette fonction de hachage,
-`SubtleCrypto` étant indisponible en contexte non sécurisé pour le SHA-256 des
-images téléchargées. La partition `storage` n'étant pas réécrite, le journal des
-observations survit à une écriture normale ; l'effacement total reste un choix
-explicite de l'utilisateur.
+The engine chosen is not `esp-web-tools`, the most common solution: its manifests
+write with `flashMode`, `flashFreq` and `flashSize` set to `keep`, meaning the
+settings already present in the board. Yet the main risk of this project is an 8 MB
+board receiving a 16 MB partition table. The RFSentinel flasher is therefore a clean
+page, built on `esptool-js` 0.7.1, which imposes `dio`, `80m` and `16MB`, reads
+the real capacity before writing and refuses any smaller board. The manifest only
+supplies URLs and hashes: never an address nor a memory setting, and the `0x0`,
+`0x8000` and `0x10000` addresses come from the page's code.
+
+The page has to work offline, therefore without ES module imports, which Chrome
+forbids under `file://`. The esptool-js bundle, shipped as ES modules, is converted
+into a classic script by `tools/make_webtool_vendor.py`: the final `export` clause
+becomes an assignment to a global, and the result is checked with `node --check`.
+
+The online mode reads `webtool/firmware/manifest.json` and the three images that
+follow it, hence the need to commit that folder.
+`tools/package_webtool_firmware.py` fills it from `build/` and refuses to copy
+anything if the build does not announce `esp32s3` in `dio/80m/16MB`. Attachments of
+a GitHub release do not return CORS headers: the firmware is therefore loaded from the
+raw files of the repository or from GitHub Pages, which do return them.
+
+After writing, esptool-js re-reads the MD5 hash of the flash and compares it with the
+hash of the image sent; the page provides that hashing function itself, `SubtleCrypto`
+being unavailable in an insecure context for the SHA-256 of downloaded images. The
+`storage` partition is not rewritten, so the observation journal survives a normal
+write; a full erase stays an explicit user choice.
 
 ```bash
 idf.py build
 python3 tools/package_webtool_firmware.py
-python3 -m http.server 8000      # puis http://localhost:8000/webtool/
-node tests/test_webtool_ui.js    # md5, manifeste, contrôle 8/16 Mo, progression
+python3 -m http.server 8000      # then http://localhost:8000/webtool/
+node tests/test_webtool_ui.js    # md5, manifest, 8/16 MB check, progress
 ```
 
-### 12.5 Configuration (`sdkconfig.defaults`)
+### 12.5 Build configuration (`sdkconfig.defaults`)
 
-| Option | Valeur | Pourquoi |
+| Option | Value | Why |
 |---|---|---|
-| `CONFIG_ESPTOOLPY_FLASHSIZE_16MB` | `y` | 16 Mo de mémoire flash |
-| `CONFIG_PARTITION_TABLE_CUSTOM` | `y` | table décrite au §3.1 |
-| PSRAM | désactivée | la carte n'en expose pas d'exploitable ici |
-| `CONFIG_BT_NIMBLE_ROLE_CENTRAL` | `y` | scans BLE actifs |
-| `CONFIG_BT_NIMBLE_ROLE_OBSERVER` | `y` | réception des publicités passives |
-| `CONFIG_BT_NIMBLE_ROLE_PERIPHERAL` | `n` | l'appareil ne se fait pas connecter |
-| `CONFIG_BT_NIMBLE_ROLE_BROADCASTER` | `n` | il n'émet pas de publicités |
-| `CONFIG_LWIP_MAX_SOCKETS` | `12` | interface, MQTT, NTP et WiGLE en parallèle |
-| `CONFIG_FREERTOS_HZ` | `1000` | temporisations de scan au millième |
-| `CONFIG_ESP_MAIN_TASK_STACK_SIZE` | `6144` | marge pour la boucle principale |
-| bundle de certificats mbedTLS | complet | HTTPS vers l'API WiGLE |
-| niveau du journal | `INFO` | lisible sur le port série sans noyer le suivi |
+| `CONFIG_ESPTOOLPY_FLASHSIZE_16MB` | `y` | 16 MB of flash |
+| `CONFIG_PARTITION_TABLE_CUSTOM` | `y` | table described in §3.1 |
+| PSRAM | disabled | the board exposes none usable here |
+| `CONFIG_BT_NIMBLE_ROLE_CENTRAL` | `y` | active BLE scans |
+| `CONFIG_BT_NIMBLE_ROLE_OBSERVER` | `y` | reception of passive advertisements |
+| `CONFIG_BT_NIMBLE_ROLE_PERIPHERAL` | `n` | the device never lets itself be connected to |
+| `CONFIG_BT_NIMBLE_ROLE_BROADCASTER` | `n` | it emits no advertisements |
+| `CONFIG_LWIP_MAX_SOCKETS` | `12` | interface, MQTT, NTP and WiGLE in parallel |
+| `CONFIG_FREERTOS_HZ` | `1000` | scan timings to the millisecond |
+| `CONFIG_ESP_MAIN_TASK_STACK_SIZE` | `6144` | headroom for the main loop |
+| mbedTLS certificate bundle | full | HTTPS to the WiGLE API |
+| log level | `INFO` | readable on the serial port without drowning the trace |
 
-### 12.6 Images livrées en v1.0.0
+### 12.6 Images shipped in v1.0.0
 
-| Fichier | Taille | SHA-256 |
+| File | Size | SHA-256 |
 |---|---|---|
-| `rfsentinel.bin` | 1 477 360 o | `c941ce1609143e41caa2b0b97972588a19b94f421c2b8fd5329a90a2b829d3f7` |
-| `bootloader.bin` | 21 648 o | `f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297` |
-| `partition-table.bin` | 3 072 o | `4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913` |
+| `rfsentinel.bin` | 1,477,360 B | `c941ce1609143e41caa2b0b97972588a19b94f421c2b8fd5329a90a2b829d3f7` |
+| `bootloader.bin` | 21,648 B | `f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297` |
+| `partition-table.bin` | 3,072 B | `4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913` |
 
-Paramètres de flash correspondants : `--flash_mode dio --flash_freq 80m
---flash_size 16MB`, aux adresses `0x0`, `0x8000` et `0x10000`.
+Matching flash parameters: `--flash-mode dio --flash-freq 80m --flash-size 16MB`, at
+addresses `0x0`, `0x8000` and `0x10000`.
 
-Ces trois images sortent d'une compilation propre sous ESP-IDF v5.3.2, sans erreur.
-Une compilation de référence produit un avertissement sans effet fonctionnel : la
-fonction `draw_frame` de `display.c` est conservée mais non appelée.
+Those three images come from a clean build under ESP-IDF v5.3.2, with no error. A
+reference build produces one warning with no functional effect: the `draw_frame`
+function in `display.c` is kept but never called.
 
-Les mêmes fichiers, aux mêmes empreintes, sont déposés dans `webtool/firmware/` par
-`tools/package_webtool_firmware.py` : le flasher du dépôt sert ce dossier, en plus
-des images chargées depuis la page des versions. Les deux sources doivent rester
-cohérentes, sous peine de proposer selon le bouton choisi deux firmwares différents
-portant le même numéro de version. Après chaque compilation destinée à être publiée,
-relancer l'outil puis vérifier que `webtool/firmware/SHA256SUMS` correspond toujours
-au contenu de `build/`.
-
----
-
-## 13. État du projet
-
-La version 1 est terminée : les fonctions annoncées sont écrites, compilées et
-utilisées. Pour rester honnête sur ce qui est garanti, l'état est séparé en trois
-niveaux.
-
-**Écrit et testé sur machine de développement** — hors cible, dans `tests/` :
-conversion du format d'export, tri et filtres de la liste des observations,
-conversion UTC vers l'heure locale, bornes du formatage, traitement des entrées
-inattendues.
-
-**Observé sur la carte** — comportement vérifié à l'écran ou dans l'interface après
-flash : allumage et lisibilité de l'écran, rotation et police corrigées, connexion
-et changement de mot de passe, lancements de scans, remplissage du journal,
-interface complète, bascule en point d'accès de secours, affichage de l'heure.
-
-**Écrit, compilé, mais à revoir sur la carte après la dernière image** : tuiles
-OpenStreetMap sur la page de recherche, masquage et révélation des six champs
-secrets de la page de configuration, heure locale dans les listes et les filtres,
-téléversement réel vers WiGLE, purge réelle du journal, téléchargement réel du
-CSV, calibration, recherche BLE et alertes de présence. Rien n'indique un problème
-sur ces points ; ils n'ont simplement pas été revérifiés un par un sur l'équipement
-depuis la dernière compilation.
-
-**Non réalisé** : aucune mesure de portée radio, d'autonomie ou de comportement en
-mobilité n'a été menée. Ce sont des validations de terrain, à la main.
+The same files, with the same hashes, are placed in `bin/` and in
+`webtool/firmware/` by `tools/package_webtool_firmware.py`: the repository flasher
+serves the second folder, alongside the images loaded from `bin/`. Both sources must
+stay consistent, otherwise two different firmwares carrying the same version number
+would be offered depending on which button was clicked. After every build meant to be
+published, rerun the tool and check that `bin/SHA256SUMS` and
+`webtool/firmware/SHA256SUMS` still match the content of `build/`.
 
 ---
 
-## 14. Évolutions possibles
 
-Des pistes, dans l'ordre où elles apporteraient le plus à l'usage :
+## 13. Project state
 
-- **Plusieurs appareils, un seul tableau.** Chaque appareil porte son identifiant ;
-  il manque une page qui fusionne les journaux de plusieurs nœuds, et une
-  synchronisation entre nœuds pour écarter les doublons.
-- **Itinéraire.** Les observations portent une position quand un GPS est branché ;
-  enregistrer la trace suivie permettrait de colorer la cartographie par instant
-  plutôt que par seule intensité de signal.
-- **Zones et seuils d'alerte.** Les alertes MQTT et la surveillance d'adresses
-  choisies existent, mais le seuil d'alerte générale reste unique. Des zones
-  dessinées sur la carte, chacune avec son seuil, affineraient la surveillance.
-- **Historique des réseaux nouveaux.** L'appareil sait repérer une adresse jamais
-  vue ; il ne tient pas encore de journal consultable avec date de première
-  rencontre et première position.
-- **Reprise d'upload.** Un téléversement WiGLE qui échoue laisse le journal intact,
-  ce qui est le comportement sûr ; une file qui retente seule éviterait d'y
-  revenir à la main.
-- **Compteur à l'écran.** L'écran de statut reste sobre ; afficher le nombre
-  d'observations écrites depuis le démarrage donnerait une preuve immédiate de
-  fonctionnement sans ouvrir l'interface.
-- **Lots plus grands vers WiGLE.** Le tampon de 6 Ko borne la taille d'un envoi ;
-  un découpage en tranches successives permettrait de remonter un journal complet
-  en une seule opération.
-- **Chiffrement de l'interface.** Un HTTPS embarqué supprimerait la circulation en
-  clair des identifiants, au prix d'une place notable en mémoire.
+Version 1 is finished: the advertised functions are written, compiled and used. To
+stay honest about what is guaranteed, the state is split into three levels.
+
+**Written and tested on the development machine** — off target, in `tests/`:
+export format conversion, sorting and filtering of the observation list, UTC to
+local-time conversion, formatting bounds, handling of unexpected input.
+
+**Observed on the board** — behaviour verified on screen or in the interface after
+flashing: power-on and screen legibility, rotation and font fixed, login and password
+change, scan launches, journal filling, the complete interface, switching to the
+rescue access point, time display.
+
+**Written, compiled, but to be reviewed on the board after the last image**:
+OpenStreetMap tiles on the search page, masking and revealing of the six secret fields
+on the configuration page, local time in lists and filters, the actual upload to
+WiGLE, the actual purge of the journal, the actual CSV download, calibration, BLE
+hunting and presence alerts. Nothing points to a problem on these points; they simply
+have not each been re-verified one by one on the equipment since the last build.
+
+**Not done**: no measurement of radio range, battery life or behaviour in motion has
+been carried out. Those are field validations, by hand.
 
 ---
 
-## 15. Risques et limites connues
+## 14. Possible evolutions
 
-| Risque | Effet | Garde-fou en place |
+Ideas, in the order they would add most to daily use:
+
+- **Several devices, one table.** Each device carries its own identifier; what is
+  missing is a page that merges the journals of several nodes, and synchronisation
+  between nodes to discard duplicates.
+- **Route.** Observations carry a position when a GPS is attached; recording the path
+  followed would allow colouring the map by instant rather than by signal strength
+  alone.
+- **Zones and alert thresholds.** MQTT alerts and watching chosen addresses exist, but
+  the general alert threshold stays single. Zones drawn on the map, each with its own
+  threshold, would refine monitoring.
+- **History of new networks.** The device can spot an address never seen before; it
+  does not yet keep a browsable journal with date of first encounter and first
+  position.
+- **Upload resume.** A WiGLE upload that fails leaves the journal intact, which is the
+  safe behaviour; a queue that retries on its own would avoid going back by hand.
+- **Counter on screen.** The status screen stays sober; showing the number of
+  observations written since boot would give immediate proof of life without opening
+  the interface.
+- **Larger batches to WiGLE.** The 6 KB buffer bounds the size of one submission;
+  splitting into successive slices would allow uploading a complete journal in one
+  operation.
+- **Encrypted interface.** Embedded HTTPS would remove credentials travelling in
+  clear text, at the cost of noticeable memory.
+
+---
+
+## 15. Known risks and limits
+
+| Risk | Effect | Guard-rail in place |
 |---|---|---|
-| Carte de 8 Mo au lieu de 16 Mo | la partition de données dépasse la mémoire, la carte ne démarre pas | avertissement au §12.3, taille explicite dans la table de partitions |
-| Mémoire interne seule, sans PSRAM | impossible de garder un gros lot en RAM | tout transite par le journal, tampons bornés, libérations sur toutes les sorties |
-| Journal saturé | les écritures s'arrêtent | seuil d'alerte à 90% d'occupation, purge commandée depuis l'interface |
-| Horodatage faux | données inexploitables en cartographie | qualité de temps enregistrée par observation et reprise dans l'export |
-| Perte du mot de passe administrateur | accès perdu | réinitialisation complète par effacement de la mémoire non volatile |
-| Écoute du réseau local | identifiants et données circulent en clair | usage prévu sur réseau maîtrisé ; cookie de session `HttpOnly` et `SameSite=Strict`, verrouillage après trois échecs |
-| Captures Wi-Fi et BLE | l'appareil enregistre des identifiants de réseaux environnants | publication et téléversement laissés à la décision de l'utilisateur, jamais automatiques |
-| Pilote d'écran sans en-tête de licence | origine du fichier peu lisible pour un repreneur | mentionnée dans `LICENSE` |
+| 8 MB board instead of 16 MB | the data partition exceeds the memory, the board does not boot | warning in §12.3, explicit size in the partition table |
+| Internal RAM only, no PSRAM | impossible to hold a large batch in RAM | everything goes through the journal, bounded buffers, frees on every exit |
+| Journal saturated | writes stop | alert threshold at 90 % usage, purge commanded from the interface |
+| Wrong timestamps | data unusable for mapping | time quality recorded per observation and carried into the export |
+| Losing the administrator password | access lost | full reset by erasing non-volatile storage |
+| Listening on the local network | credentials and data travel in clear text | intended for a controlled network; session cookie `HttpOnly` and `SameSite=Strict`, lockout after three failures |
+| Wi-Fi and BLE capture | the device records identifiers of surrounding networks | publication and upload left to the user's decision, never automatic |
+| Screen driver without licence header | file origin hard to read for a maintainer | noted in `LICENSE` |
 
-Ce qui relève de la loi, et non du code : capter le trafic des réseaux voisins et
-le publier sur une plateforme dépend de la réglementation du pays d'utilisation. Le
-téléversement vers WiGLE est un clic de l'utilisateur, jamais un automatisme, et
-les identifiants de la plateforme ne sont jamais renvoyés par l'appareil.
-
----
-
-## 16. Utiliser RFSentinel
-
-### 16.1 Mise en route
-
-1. Flasher les trois images (§12.3), ou les images publiées en version.
-2. Brancher la carte sur un port USB ou un chargeur 5 V. L'écran affiche le logo,
-   puis le numéro de version et l'adresse obtenue.
-3. Rejoindre le réseau proposé. Au premier lancement, aucun Wi-Fi n'est
-   enregistré : l'appareil ouvre lui-même le point d'accès `RFSentinel-Setup`, mot
-   de passe `012345678`.
-4. Ouvrir `http://192.168.4.1` depuis ce même réseau.
-
-### 16.2 Première connexion
-
-Le compte de départ est `admin` / `admin`. La connexion ouvre obligatoirement un
-écran de changement de mot de passe : sans nouveau mot de passe, l'interface reste
-inaccessible. C'est le seul moyen de protéger l'appareil, puisqu'il écoute sur le
-réseau local.
-
-Une fois connecté, la page de configuration permet de renseigner le Wi-Fi cible, le
-fuseau, l'identifiant de l'appareil, et éventuellement MQTT et WiGLE. Après
-enregistrement du Wi-Fi, l'appareil redémarre sur ce réseau et l'adresse affichée à
-l'écran devient celle qu'il faut utiliser.
-
-### 16.3 Usage courant
-
-Les scans démarrent seuls au lancement, si l'option est laissée active. La page de
-suivi montre l'état du Wi-Fi et du Bluetooth, le remplissage du journal et les
-dernières observations, triables et filtrables. La page de cartographie place les
-observations et les réseaux connus sur un fond OpenStreetMap. La page
-d'export prépare le fichier au format WiGLE, et la page d'upload l'envoie à la
-plateforme quand on le demande.
-
-On peut aussi dresser la liste des adresses MAC à surveiller : chacune
-déclenche une alerte MQTT à la détection, quelle que soit la force du signal,
-puis une nouvelle alerte après absence.
-
-Les seuils de signaux faibles et le seuil d'alerte MQTT se règlent dans
-la configuration ; ils agissent dès le scan suivant.
-
-### 16.4 Ce que RFSentinel ne fait pas
-
-- Il ne se connecte à aucun des réseaux qu'il détecte et ne teste aucun mot de
-  passe. Il écoute les trames que les bornes diffusent publiquement.
-- Il ne localise pas par lui-même : sans GPS branché, les coordonnées restent à
-  zéro et l'export l'indique.
-- Il ne téléverse rien vers WiGLE sans qu'on le lui demande. Les seules
-  publications automatiques sont les alertes MQTT, et seulement si MQTT est
-  activé.
-- Il ne remplace pas un audit réseau : il produit une base de données de
-  couverture, pas un diagnostic de conformité.
+What falls under law rather than code: capturing the traffic of neighbouring networks
+and publishing it on a platform depends on the regulations of the country of use.
+Uploading to WiGLE is a user click, never an automatism, and the platform credentials
+are never returned by the device.
 
 ---
 
-## 17. Reprendre le projet
+## 16. Using RFSentinel
 
-### 17.1 Ordre de lecture
+### 16.1 Getting started
 
-1. `README.md` : ce que fait l'appareil, sur quelle carte, comment compiler.
-2. Ce fichier : le pourquoi des choix, le détail des mécanismes, les valeurs.
-3. Le code, dans l'ordre du §3.1 : `config` et `store` d'abord, car presque tout
-   le reste lit ou écrit chez eux.
+1. Flash the three images (§12.3), or the images published in `bin/`.
+2. Plug the board into a USB port or a 5 V charger. The screen shows the logo, then
+   the version number and the address obtained.
+3. Join the network offered. On first launch no Wi-Fi is stored: the device opens the
+   access point `RFSentinel-Setup` itself, password `012345678`.
+4. Open `http://192.168.4.1` from that same network.
 
-### 17.2 Tests sur machine
+### 16.2 First login
 
-Le dossier `tests/` contient vingt-six programmes autonomes, exécutés sur la machine
-de développement sans ESP-IDF ni matériel : dix-huit en Python, sept en JavaScript
-passé par Node, un en C. Ils portent sur la logique qui n'a pas besoin de la carte :
-format de l'export CSV, tri et filtres, conversions de temps et bornes de
-formatage, seuils d'enregistrement et d'alerte MQTT, déduplication, équipements
-surveillés sous toutes leurs coutures — API, logique, charge utile MQTT, interface —,
-recomptage, accès concurrents au journal, itération sur un LittleFS fragmenté,
-recherches WiGLE en lecture, en résumé et en TLS, lecture de l'export, et deux
-programmes qui compilent un morceau du firmware sur l'hôte :
-`test_display_lifecycle_host.py` rejoue la bascule d'extinction avec un transfert
-DMA simulé et vérifie que le framebuffer n'est rendu qu'une fois ce transfert terminé
-(§11.5) ; `test_wigle_memory_host.py` exécute le vrai code de recherche WiGLE avec
-un HTTPS simulé et des allocations en échec, pour vérifier que tous les blocs sont
-libérés sur les sorties anticipées.
+The starting account is `admin` / `admin`. Logging in necessarily opens a password
+change screen: without a new password the interface stays inaccessible. That is the
+only way to protect the device, since it listens on the local network.
+
+Once logged in, the configuration page lets you fill in the target Wi-Fi, the
+timezone, the device identifier, and optionally MQTT and WiGLE. After saving the
+Wi-Fi, the device restarts onto that network and the address shown on screen becomes
+the one to use.
+
+### 16.3 Everyday use
+
+Scanning starts by itself at boot if the option is left active. The status page shows
+the state of Wi-Fi and Bluetooth, how full the journal is and the latest
+observations, sortable and filterable. The map page places observations and known
+networks on an OpenStreetMap background. The export page prepares the file in WiGLE
+format, and the upload page sends it to the platform when asked.
+
+You can also build the list of MAC addresses to watch: each one triggers an MQTT
+alert on detection, whatever the signal strength, then a new alert after absence.
+
+The weak-signal thresholds and the MQTT alert threshold are set in the configuration;
+they take effect from the next scan.
+
+### 16.4 What RFSentinel does not do
+
+- It connects to none of the networks it detects and tests no password. It listens to
+  the frames access points broadcast publicly.
+- It does not locate by itself: without an attached GPS, coordinates stay zero and the
+  export says so.
+- It uploads nothing to WiGLE unless asked. The only automatic publications are MQTT
+  alerts, and only if MQTT is enabled.
+- It is not a substitute for a network audit: it produces a coverage database, not a
+  compliance diagnosis.
+
+---
+
+## 17. Taking the project over
+
+### 17.1 Reading order
+
+1. `README.md`: what the device does, on which board, how to compile.
+2. This file: why the choices were made, how the mechanisms work, the values.
+3. The code, in the order of §3.1: `config` and `store` first, because almost
+   everything else reads from or writes to them.
+
+The French versions of both documents live in `docs/fr/` and carry the same content.
+
+### 17.2 Host-side tests
+
+The `tests/` folder holds twenty-six standalone programs, run on the development
+machine without ESP-IDF and without hardware: eighteen in Python, seven in JavaScript
+through Node, one in C. They cover the logic that does not need the board: CSV export
+format, sorting and filtering, time conversions and formatting bounds, recording and
+MQTT alert thresholds, de-duplication, watched devices from every angle — API, logic,
+MQTT payload, interface —, recounting, concurrent access to the journal, iteration
+over a fragmented LittleFS, WiGLE searches in list mode, in summary and in TLS,
+reading of the export, and two programs that compile a piece of the firmware on the
+host: `test_display_lifecycle_host.py` replays the switch-off toggle with a simulated
+DMA transfer and checks the framebuffer is only returned once that transfer finished
+(§11.5); `test_wigle_memory_host.py` runs the real WiGLE search code with simulated
+HTTPS and failing allocations, to check every block is released on early exits.
 
 ```bash
 for t in tests/test_*.py; do python3 "$t"; done
@@ -954,62 +967,59 @@ cc -I"$LFS" tests/test_littlefs_iter_host.c "$LFS/lfs.c" "$LFS/lfs_util.c" \
    -o /tmp/lfs_iter && /tmp/lfs_iter
 ```
 
-Les programmes Python et JavaScript se lancent tels quels, sans dépendance
-extérieure. Celui en C se compile contre la bibliothèque LittleFS récupérée par
-ESP-IDF, d'où le `-I` sur le dossier de composants ; la compilation doit intervenir
-après un `idf.py reconfigure`, seul capable de créer ce dossier. Il n'y a pas
-d'orchestrateur unique dans le dépôt : chaque programme affiche ce qu'il vérifie et
-sort avec un code non nul en cas d'échec.
+The Python and JavaScript programs run as they are, with no external dependency. The
+C one compiles against the LittleFS library fetched by ESP-IDF, hence the `-I` on the
+components folder; that compilation has to come after an `idf.py reconfigure`, the
+only thing able to create the folder. There is no single orchestrator in the
+repository: each program prints what it checks and exits non-zero on failure.
 
-Ces tests ne prouvent rien sur la radio, l'écran ou le système de fichiers : ils
-couvrent le traitement des données, pas la cible.
+These tests prove nothing about the radio, the screen or the filesystem: they cover
+data processing, not the target.
 
-### 17.3 Conventions du code
+### 17.3 Code conventions
 
-- Une fonctionnalité n'est tenue pour opérationnelle que si elle a été observée sur
-  la carte. Une compilation sans erreur ne suffit pas, et le §13 distingue
-  explicitement les deux.
-- Toute valeur visible d'un utilisateur passe par une constante nommée dans un
-  en-tête, jamais par un nombre écrit au milieu d'un traitement.
-- Les tampons ont une taille maximale connue à l'avance, et chaque sortie anticipée
-  libère ce qui a été alloué. C'est la conséquence directe de l'absence de PSRAM.
-- Les champs sensibles ne sortent jamais de l'appareil vers l'interface : ils ne
-  sont pas renvoyés par l'API, et l'interface ne les réaffiche pas.
-- Le français est la langue de référence ; les chaînes affichées existent dans les
-  deux langues et se choisissent par `ui_lang`.
+- A feature is only held to be operational if it has been observed on the board. A
+  clean compile is not enough, and §13 draws the distinction explicitly.
+- Every value a user can see goes through a named constant in a header, never a
+  number written in the middle of a handler.
+- Buffers have a size known in advance, and every early exit frees what was allocated.
+  That is the direct consequence of having no PSRAM.
+- Sensitive fields never leave the device towards the interface: they are not returned
+  by the API, and the interface never redisplays them.
+- French is the reference language; the displayed strings exist in both languages and
+  are selected by `ui_lang`.
 
-### 17.4 Ce qui n'a pas sa place dans le dépôt
+### 17.4 What does not belong in the repository
 
-`.gitignore` tient le dépôt léger et ne laisse entrer que ce qui sert à compiler,
-comprendre ou utiliser l'appareil. Ce qui reste dehors, et pourquoi :
+`.gitignore` keeps the repository light and only lets in what serves to compile,
+understand or use the device. What stays out, and why:
 
-| Exclu | Motif |
+| Excluded | Reason |
 |---|---|
-| `build/`, `managed_components/`, `sdkconfig` | produits par `idf.py` sur la machine de qui compile ; `sdkconfig` porte les réglages locaux |
-| `.build*.log`, `*.log`, `backups/` | journaux de compilation et sauvegardes du journal radio réel, donc des relevés d'environnement |
-| `*.bin`, `*.elf`, `*.map` | images de flash ; la version publiée est celle de la page des versions |
-| `./*.h`, `/lcd/`, SVG à la racine | duplicatas de travail ; la source de vérité est dans `main/` et `logo/` |
-| `notes/`, `01-*.md`, `02-*.md`, `03-*.md`, `PROGRESS.md` | journal de conception interne, avec adresses et relevés réels |
-| `._*`, `.DS_Store` | métadonnées macOS |
-| `.env`, `*.pem`, `*.key`, `credentials*`, `secrets*` | rien de confidentiel n'a sa place dans l'histoire du dépôt |
+| `build/`, `managed_components/`, `sdkconfig` | produced by `idf.py` on whoever compiles; `sdkconfig` carries local settings |
+| `.build*.log`, `*.log`, `backups/` | build logs and backups of the real radio journal, therefore real environment readings |
+| `*.bin`, `*.elf`, `*.map` | flash images; the published version is the one in `bin/` and on the release page |
+| `./*.h`, `/lcd/`, SVG at the root | working duplicates; the source of truth is in `main/` and `logo/` |
+| `notes/`, `01-*.md`, `02-*.md`, `03-*.md`, `PROGRESS.md` | internal design journal, with real addresses and real readings |
+| `._*`, `.DS_Store` | macOS metadata |
+| `.env`, `*.pem`, `*.key`, `credentials*`, `secrets*` | nothing confidential belongs in repository history |
 
-Une exception assume la règle : `!webtool/firmware/*.bin`. Le flasher du dépôt a
-besoin de ses trois images pour fonctionner sans téléchargement préalable — le mode
-« Depuis le dépôt » ; elles sont donc suivies malgré `*.bin`. Le point à surveiller
-est là : la page des versions et ce dossier doivent porter les mêmes empreintes (§12.6).
+One exception assumes the rule: `!bin/*.bin` and `!webtool/firmware/*.bin`. The
+browser flasher needs its three images to work without a prior download — the "From
+repository" mode — and `bin/` exists so the images can be flashed without compiling;
+they are therefore tracked despite `*.bin`. The point to watch is that the release
+page, `bin/` and `webtool/firmware/` must carry the same hashes (§12.6).
 
-`screen/` ne contient que les cinq captures de la page d'accueil, ramenées au
-double de la largeur où le README les affiche — 1012 px de large maximum pour la
-page des observations, 940 px pour celles d'un tableau à deux colonnes — afin de
-rester net sur un écran Retina sans traîner des pixels que personne ne verra.
-Le fichier de connexion fait exception : 23 Ko en 1400 px, et tout
-rééchantillonnage le ferait grimper à 177 Ko parce que l'anti-crénelage détruit
-la compression des aplats. Avant publication, repasser `exiftool` sur ces
-fichiers : aucun ne doit porter d'horodatage, de marque, de modèle, de
-coordonnées ni de XMP.
+`screen/` only contains the five screenshots of the landing page, resampled to twice
+the width at which the README displays them — 1012 px wide maximum for the
+observations page, 940 px for the two-column ones — so they stay sharp on a Retina
+screen without carrying pixels nobody will see. The login file is the exception: 23 KB
+at 1400 px, and any further resampling would push it to 177 KB because anti-aliasing
+destroys the compression of flat areas. Before publishing, run `exiftool` over these
+files again: none should carry a timestamp, a make, a model, coordinates or XMP.
 
-Avant toute publication, vérifier ce qui partirait réellement, puis relire cette
-liste à la recherche d'une identité, d'une adresse réseau ou d'un secret oublié :
+Before any publication, check what would actually go, then reread this list looking
+for an identity, a network address or a forgotten secret:
 
 ```bash
 git ls-files --others --exclude-standard | while IFS= read -r f; do
@@ -1017,21 +1027,22 @@ git ls-files --others --exclude-standard | while IFS= read -r f; do
 done
 ```
 
-Les seules adresses IP que cette recherche doit laisser trouver sont celle de l'AP
-de secours, `192.168.4.1`, constante de `main/net.h`, et le `192.168.1.1` donné en
-exemple dans le champ broker de la page de configuration. Les identifiants de
-première mise en route — `admin`, `RFSentinel-Setup`, `012345678` — sont attendus
-aussi : ce sont des valeurs par défaut documentées, pas des secrets.
+The only IP addresses this search should find are the rescue AP address,
+`192.168.4.1`, a constant in `main/net.h`, and the `192.168.1.1` given as an
+example in the broker field of the configuration page. The first-run credentials —
+`admin`, `RFSentinel-Setup`, `012345678` — are expected too: they are documented
+default values, not secrets.
 
 ---
 
-## 18. Constantes de référence
 
-Toutes les valeurs ci-dessous sont lues dans le code, avec le nom qui les porte.
+## 18. Reference constants
 
-### 18.1 Identité et accès
+Every value below is read from the code, with the name it carries there.
 
-| Constante | Valeur | Emplacement |
+### 18.1 Identity and access
+
+| Constant | Value | Location |
 |---|---|---|
 | `RFS_VERSION` | `1.0.0` | `main/version.h` |
 | `CFG_AP_SSID` | `RFSentinel-Setup` | `main/config.h` |
@@ -1040,191 +1051,189 @@ Toutes les valeurs ci-dessous sont lues dans le code, avec le nom qui les porte.
 | `CFG_DEFAULT_USER` / `CFG_DEFAULT_PASS` | `admin` / `admin` | `main/config.c` |
 | `NVS_NS` | `rfsentinel` | `main/config.c`, `net.c`, `store.c` |
 | `SESSION_TTL_US` | 1 h | `main/auth.c` |
-| Cookie de session | `sid; Path=/; HttpOnly; SameSite=Strict; Max-Age=3600` | `main/auth.c` |
-| Verrouillage de connexion | 30 s après 3 échecs | `main/auth.c` |
+| Session cookie | `sid; Path=/; HttpOnly; SameSite=Strict; Max-Age=3600` | `main/auth.c` |
+| Login lockout | 30 s after 3 failures | `main/auth.c` |
 | `FALLBACK_EPOCH` | `1735689600` (2025-01-01 UTC) | `main/net.c` |
 | `TZ_DEFAULT` | `CET-1CEST,M3.5.0,M10.5.0/3` | `main/net.c` |
-| Serveur NTP par défaut | `pool.ntp.org` | valeur de repli dans `main/config.c` |
-| `NTP_RESYNC_INTERVAL_S` | 21 600 s (6 h) | `main/net.c` |
-| `TIME_REF_SAVE_INTERVAL_S` | 3 600 s | `main/net.c` |
-| `STA_CONNECT_TIMEOUT_MS` | 8 000 ms | `main/net.c` |
+| Default NTP server | `pool.ntp.org` | fallback value in `main/config.c` |
+| `NTP_RESYNC_INTERVAL_S` | 21,600 s (6 h) | `main/net.c` |
+| `TIME_REF_SAVE_INTERVAL_S` | 3,600 s | `main/net.c` |
+| `STA_CONNECT_TIMEOUT_MS` | 8,000 ms | `main/net.c` |
 | `STA_MAX_RETRY` | 4 | `main/net.c` |
 
-### 18.2 Scans
+### 18.2 Scanning
 
-| Constante | Valeur | Emplacement |
+| Constant | Value | Location |
 |---|---|---|
 | `SCAN_WIFI_INTERVAL_S` | 4 s | `main/scanner.c` |
-| `SCAN_WIFI_MAX_APC` | 40 réseaux par tour | `main/scanner.c` |
+| `SCAN_WIFI_MAX_APC` | 40 networks per round | `main/scanner.c` |
 | `SCAN_BLE_INTERVAL_S` | 20 s | `main/scanner.c` |
-| `SCAN_BLE_DURATION_MS` | 10 000 ms | `main/scanner.c` |
-| `SCAN_BLE_MAX` | 12 appareils par tour | `main/scanner.c` |
+| `SCAN_BLE_DURATION_MS` | 10,000 ms | `main/scanner.c` |
+| `SCAN_BLE_MAX` | 12 devices per round | `main/scanner.c` |
 | `CALIBRATION_TIMEOUT_MS` | 15 min | `main/scanner.c` |
 | `SCANNER_FIND_MAX` | 48 | `main/scanner.h` |
-| Mode de scan | passif, `filter_duplicates=1` | `main/scanner.c` |
+| Scan mode | passive, `filter_duplicates=1` | `main/scanner.c` |
 
-### 18.3 Journal et données
+### 18.3 Journal and data
 
-| Constante | Valeur | Emplacement |
+| Constant | Value | Location |
 |---|---|---|
 | `RFS_MOUNT` | `/rfs` | `main/store.c` |
 | `RFS_OBS_DIR` | `/rfs/observations` | `main/store.c` |
 | `RFS_OBS_PREFIX` | `obs_` | `main/store.c` |
-| `RFS_OBS_MAX_FILES` | 32 fichiers | `main/store.c` |
-| `RFS_SEGMENT_MAX_BYTES` | 32 768 o | `main/store.c` |
-| `RFS_LINE_MAX` | 256 o | `main/store.c` |
-| `RFS_LIST_PAGE` | 10 lignes par page | `main/store.c` |
+| `RFS_OBS_MAX_FILES` | 32 files | `main/store.c` |
+| `RFS_SEGMENT_MAX_BYTES` | 32,768 B | `main/store.c` |
+| `RFS_LINE_MAX` | 256 B | `main/store.c` |
+| `RFS_LIST_PAGE` | 10 rows per page | `main/store.c` |
 | `RFS_SORT_MAX` | `RFS_LIST_PAGE + 1` | `main/store.c` |
-| `RFS_HIST_MAX` | 10 entrées | `main/store.c` |
+| `RFS_HIST_MAX` | 10 entries | `main/store.c` |
 | `RFS_USAGE_LIMIT_PCT` | 90 % | `main/store.c` |
-| `SEEN_CAPACITY` | 128 adresses connues | `main/store.c` |
+| `SEEN_CAPACITY` | 128 known addresses | `main/store.c` |
 | `BL_CACHE_MAX` | 64 | `main/store.c` |
 | `BL_INDEX_MAX` | `BL_CACHE_MAX * 18` | `main/store.c` |
 | `OBS_SSID_MAX` / `OBS_AUTH_MAX` | 33 / 16 | `main/store.h` |
 
-L'en-tête d'export est `WigleWifi-1.6,apssids=true,latlon=true,
+The export header is `WigleWifi-1.6,apssids=true,latlon=true,
 lockedToNetwork=false,cellBands=auto`.
 
 ### 18.4 MQTT
 
-| Constante | Valeur | Emplacement |
+| Constant | Value | Location |
 |---|---|---|
 | `MQTT_SEEN_MAX` | 16 | `main/mqtt.c` |
 | `MQTT_URL_MAX` | 96 | `main/mqtt.c` |
 | `OBS_MAC_STR` / `OBS_TS_STR` | 18 / 20 | `main/mqtt.c` |
-| Sujet par défaut | `/rfsentinel/alert` | `main/config.c` |
-| Identifiant client par défaut | `rfsentinel` | `main/config.c` |
-| Port par défaut | 1883, sans TLS | `main/config.c` |
-| Qualité de service | 1, sans rétention | `main/mqtt.c` |
-| Taille de message | 384 o au plus | `main/mqtt.c` |
+| Default topic | `/rfsentinel/alert` | `main/config.c` |
+| Default client id | `rfsentinel` | `main/config.c` |
+| Default port | 1883, no TLS | `main/config.c` |
+| Quality of service | 1, no retention | `main/mqtt.c` |
+| Message size | 384 B at most | `main/mqtt.c` |
 | `PRESENCE_MAX` / `PRESENCE_LABEL_MAX` | 32 / 32 | `main/presence.h` |
 | `PRESENCE_RETRY_US` | 5 s | `main/presence.c` |
-| Espace NVS des surveillances | `rfs_presence` | `main/presence.c` |
-| Sujet de présence par défaut | `/rfsentinel/presence` | `main/presence.c` |
-| Absence avant alerte de retour | 120 s, 30 s minimum | `main/presence.c` |
-| Message de présence | 512 o au plus | `main/mqtt.c` |
+| NVS namespace for watching | `rfs_presence` | `main/presence.c` |
+| Default presence topic | `/rfsentinel/presence` | `main/presence.c` |
+| Absence before a return alert | 120 s, 30 s minimum | `main/presence.c` |
+| Presence message | 512 B at most | `main/mqtt.c` |
 
-### 18.5 Écran
+### 18.5 Screen
 
-| Constante | Valeur | Emplacement |
+| Constant | Value | Location |
 |---|---|---|
 | `RFS_SCREEN_W` / `RFS_SCREEN_H` | 160 / 80 | `main/display.c` |
 | `RFS_LINE_H` | 16 px | `main/display.c` |
 | `RFS_MARGIN` | 4 px | `main/display.c` |
 | `RFS_LOGO_H` | 64 px | `main/display.c` |
 | `OLED_LOGO_W` / `OLED_LOGO_H` | 64 / 64 | `main/oled_logo.h` |
-| Signature de démarrage | `By M3r0W1g` | `draw_credit` dans `main/display.c` |
-| `RFS_BOOT_HOLD_MS` | 60 000 ms, soit 1 min | `main/display.c` |
-| Framebuffer | 25 600 o en `MALLOC_CAP_DMA \| MALLOC_CAP_INTERNAL`, libere a la veille | `main/display.c` |
-| Horloge SPI | 20 MHz | `main/display.c` |
+| Boot signature | `By M3r0W1g` | `draw_credit` in `main/display.c` |
+| `RFS_BOOT_HOLD_MS` | 60,000 ms, that is 1 min | `main/display.c` |
+| Framebuffer | 25,600 B in `MALLOC_CAP_DMA \| MALLOC_CAP_INTERNAL`, freed on blank | `main/display.c` |
+| SPI clock | 20 MHz | `main/display.c` |
 
-| Broche | GPIO | Rôle |
+| Pin | GPIO | Role |
 |---|---|---|
-| `RFS_PIN_LCD_CLK` | 5 | horloge SPI |
-| `RFS_PIN_LCD_MOSI` | 3 | données |
-| `RFS_PIN_LCD_DC` | 2 | registre ou image |
-| `RFS_PIN_LCD_RST` | 1 | réinitialisation |
-| `RFS_PIN_LCD_CS` | 4 | sélection d'esclave |
-| `RFS_PIN_LCD_BL` | 38 | rétroéclairage, actif à l'état bas |
+| `RFS_PIN_LCD_CLK` | 5 | SPI clock |
+| `RFS_PIN_LCD_MOSI` | 3 | data |
+| `RFS_PIN_LCD_DC` | 2 | register or image |
+| `RFS_PIN_LCD_RST` | 1 | reset |
+| `RFS_PIN_LCD_CS` | 4 | slave select |
+| `RFS_PIN_LCD_BL` | 38 | backlight, active low |
 
-### 18.6 Tampons de l'interface
+### 18.6 Interface buffers
 
-| Constante | Valeur | Emplacement |
+| Constant | Value | Location |
 |---|---|---|
-| `RFS_UI_BUF` | 4 096 o | `main/web.c` |
-| `RFS_OBS_BUF` | 8 192 o (repli à 4 096 o) | `main/web.c` |
-| `RFS_HIST_BUF` | 8 192 o | `main/web.c` |
-| `RFS_POST_MAX` | 4 096 o | `main/web.c` |
-| `RFS_WIGLE_BUF` | 8 192 o | `main/web.c` |
-| `RFS_EXPORT_BUF` | 4 096 o | `main/web.c` |
-| `WIGLE_BODY_MAX` | 6 144 o | `main/wigle.c` |
-| `WIGLE_MAX_ROWS` | 10 lignes | `main/wigle.c` |
-| Gestionnaires HTTP | 28 déclarés pour 27 routes | `main/web.c` |
+| `RFS_UI_BUF` | 4,096 B | `main/web.c` |
+| `RFS_OBS_BUF` | 8,192 B (falls back to 4,096 B) | `main/web.c` |
+| `RFS_HIST_BUF` | 8,192 B | `main/web.c` |
+| `RFS_POST_MAX` | 4,096 B | `main/web.c` |
+| `RFS_WIGLE_BUF` | 8,192 B | `main/web.c` |
+| `RFS_EXPORT_BUF` | 4,096 B | `main/web.c` |
+| `WIGLE_BODY_MAX` | 6,144 B | `main/wigle.c` |
+| `WIGLE_MAX_ROWS` | 10 rows | `main/wigle.c` |
+| HTTP handlers | 28 declared for 27 routes | `main/web.c` |
 
-### 18.7 Valeurs de première configuration
+### 18.7 First-configuration values
 
-Ces valeurs s'appliquent tant que l'utilisateur n'a rien changé.
+These apply until the user changes something.
 
-| Réglage | Valeur initiale |
+| Setting | Initial value |
 |---|---|
-| Seuil de signal faible | -95 dBm |
-| Seuil d'alerte MQTT | -60 dBm |
-| Délai de redécouverte | 60 min |
-| Scan Wi-Fi, scan BLE, démarrage automatique | actives |
-| Langue | français |
-| MQTT | désactivé, port 1883, sans TLS |
-| Identifiant de l'appareil | `rfsentinel-01` |
+| Weak-signal threshold | -95 dBm |
+| MQTT alert threshold | -60 dBm |
+| Rediscovery delay | 60 min |
+| Wi-Fi scan, BLE scan, automatic start | enabled |
+| Language | French |
+| MQTT | disabled, port 1883, no TLS |
+| Device identifier | `rfsentinel-01` |
 | Position | latitude 0, longitude 0 |
-| Serveur NTP | `pool.ntp.org` |
-| Fuseau | `CET-1CEST,M3.5.0,M10.5.0/3` |
+| NTP server | `pool.ntp.org` |
+| Timezone | `CET-1CEST,M3.5.0,M10.5.0/3` |
 
 ---
 
 ## 19. Versions
 
-| Version | Date | Contenu |
+| Version | Date | Content |
 |---|---|---|
-| 1.0.0 | novembre 2026 | première version complète |
+| 1.0.0 | November 2026 | first complete release |
 
-La version 1.0.0 réunit les scans Wi-Fi et BLE, le journal sur carte, l'interface
-web en français et en anglais, la cartographie, l'export au format WiGLE, le
-téléversement vers WiGLE, les alertes MQTT, l'écran et le point d'accès de secours.
+Version 1.0.0 brings together Wi-Fi and BLE scanning, the journal on the board, the
+web interface in French and English, the map, export in WiGLE format, upload to
+WiGLE, MQTT alerts, the screen and the rescue access point.
 
-Le numéro est défini une seule fois, dans `main/version.h`, et repris par l'API,
-l'écran et l'interface. Une version publiée n'est pas modifiée après coup : les
-corrections vont dans la version suivante.
+The number is defined once, in `main/version.h`, and picked up by the API, the
+screen and the interface. A published version is not modified afterwards: fixes go
+into the next version.
 
 ---
 
-## 20. Où regarder dans le code
+## 20. Where to look in the code
 
-| Fichier | Rôle |
+| File | Role |
 |---|---|
-| `main/main.c` | démarrage, ordre d'initialisation, boucle principale |
-| `main/version.h` | numéro de version |
-| `main/config.c` | réglages persistes en mémoire non volatile |
-| `main/store.c` | journal sur carte, liste, tri, filtres, purge, liste noire |
-| `main/scanner.c` | scans Wi-Fi et BLE, calibration |
-| `main/net.c` | connexion, point d'accès de secours, NTP, heure locale |
-| `main/auth.c` | sessions, verrouillage après échecs |
-| `main/web.c` | routes HTTP, pages, API, export |
-| `main/ui/index.html` | interface complète, d'une seule pièce |
-| `main/mqtt.c` | alertes |
-| `main/presence.c` | adresses surveillées, alertes de présence |
-| `main/wigle.c` | téléversement et recherche |
-| `main/display.c` | framebuffer, rotation, accueil, statut, veille |
-| `main/oled_logo.h` | logo 64 x 64 |
-| `main/lcd/esp_lcd_st7735.c` | pilote du contrôleur d'écran |
-| `partitions.csv` | répartition de la mémoire flash |
-| `sdkconfig.defaults` | options de compilation |
-| `tests/` | tests hors cible |
+| `main/main.c` | startup, initialisation order, main loop |
+| `main/version.h` | version number |
+| `main/config.c` | settings persisted in non-volatile storage |
+| `main/store.c` | journal on the board, list, sort, filters, purge, blacklist |
+| `main/scanner.c` | Wi-Fi and BLE scans, calibration |
+| `main/net.c` | connection, rescue access point, NTP, local time |
+| `main/auth.c` | sessions, lockout after failures |
+| `main/web.c` | HTTP routes, pages, API, export |
+| `main/ui/index.html` | the whole interface, in one piece |
+| `main/mqtt.c` | alerts |
+| `main/presence.c` | watched addresses, presence alerts |
+| `main/wigle.c` | upload and lookup |
+| `main/display.c` | framebuffer, rotation, home screen, status, blanking |
+| `main/oled_logo.h` | 64 × 64 logo |
+| `main/lcd/esp_lcd_st7735.c` | screen controller driver |
+| `partitions.csv` | flash layout |
+| `sdkconfig.defaults` | build options |
+| `tests/` | off-target tests |
 
 ---
 
 ## 21. Licence
 
-RFSentinel est publié sous **Creative Commons Attribution - Usage non commercial
-- Partage dans les mêmes conditions 4.0 International** (CC BY-NC-SA 4.0). Le texte
-complet est dans `LICENSE`.
+RFSentinel is published under **Creative Commons Attribution-NonCommercial-
+ShareAlike 4.0 International** (CC BY-NC-SA 4.0). The full text is in `LICENSE`.
 
-Concrètement :
+In practical terms:
 
-- vous pouvez copier, modifier, adapter, compiler pour votre carte, diffuser ;
-- à condition de citer l'auteur ;
-- à condition de ne pas en faire un usage commercial ;
-- et à condition que toute version modifiée ou dérivée reste sous la même licence,
-  donc libre et sans usage commercial à son tour. Un fork reste ouvert.
+- you may copy, modify, adapt, compile for your board, distribute;
+- provided you credit the author;
+- provided you do not use it commercially;
+- and provided any modified or derived version stays under the same licence, that is
+  free and non-commercial in its turn. A fork stays open.
 
-Un usage commercial reste possible, mais seulement avec un accord écrit de
-l'auteur.
+Commercial use remains possible, but only with written agreement from the author.
 
-Deux précisions honnêtes pour un repreneur :
+Two honest notes for someone taking the project over:
 
-- CC BY-NC-SA n'est pas une licence approuvée par l'Open Source Initiative, parce
-  que la clause non commerciale est jugée discriminante par cette définition. Le
-  projet assume ce choix : l'objectif est la diffusion libre avec interdiction
-  d'exploitation commerciale, pas la conformité à cette définition.
-- le composant `joltwallet/littlefs`, récupéré par le gestionnaire de composants,
-  reste sous Apache-2.0 et suit ses propres termes. Le pilote
-  `main/lcd/esp_lcd_st7735.c` ne porte pas d'en-tête de licence ; cette origine
-  incertaine est signalée dans `LICENSE`.
+- CC BY-NC-SA is not an Open Source Initiative approved licence, because the
+  non-commercial clause is judged discriminatory by that definition. The project
+  owns this choice: the goal is free distribution with commercial exploitation
+  forbidden, not compliance with that definition.
+- the `joltwallet/littlefs` component, fetched by the component manager, stays under
+  Apache-2.0 and follows its own terms. The driver `main/lcd/esp_lcd_st7735.c`
+  carries no licence header; that uncertain origin is flagged in `LICENSE`.
+

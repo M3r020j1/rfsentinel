@@ -5,154 +5,147 @@
 <h1 align="center">RFSentinel</h1>
 
 <p align="center">
-  <strong>Sonde radio autonome et 100 % passive sur dongle ESP32-S3</strong><br>
-  Wi-Fi 2.4 GHz + Bluetooth Low Energy · aucune connexion, aucune interception<br>
+  <strong>Standalone, fully passive radio probe on an ESP32-S3 dongle</strong><br>
+  Wi-Fi 2.4 GHz + Bluetooth Low Energy · connects to nothing, intercepts nothing<br>
   <em>Version 1.0.0</em>
 </p>
 
 <p align="center">
-  <a href="#licence"><img src="https://img.shields.io/badge/licence-CC%20BY--NC--SA%204.0-informational" alt="Licence CC BY-NC-SA 4.0"></a>
+  <a href="#license"><img src="https://img.shields.io/badge/license-CC%20BY--NC--SA%204.0-informational" alt="License CC BY-NC-SA 4.0"></a>
   <img src="https://img.shields.io/badge/ESP--IDF-5.3.2-blue" alt="ESP-IDF 5.3.2">
-  <img src="https://img.shields.io/badge/cible-ESP32--S3-orange" alt="ESP32-S3">
-  <img src="https://img.shields.io/badge/flash-16%20Mo-green" alt="16 Mo flash">
+  <img src="https://img.shields.io/badge/target-ESP32--S3-orange" alt="ESP32-S3">
+  <img src="https://img.shields.io/badge/flash-16%20MB-green" alt="16 MB flash">
   <img src="https://img.shields.io/badge/interface-FR%20%2F%20EN-lightgrey" alt="FR/EN">
 </p>
 
-RFSentinel écoute l'environnement radio qui nous entoure et le rend lisible.
-Branché sur un port USB, il capte les trames **librement diffusées** — les beacons
-Wi-Fi et les advertisements Bluetooth LE — les horodate, les journalise dans sa
-propre flash, et les expose sur une interface Web embarquée. Il ne se connecte à
-aucun réseau, ne déchiffre rien, n'intercepte aucune communication : il observe,
-il note, il affiche.
+<p align="center"><strong>English</strong> · <a href="docs/fr/README.md">Français</a></p>
 
-Pensé pour tenir dans la poche et fonctionner sans infrastructure, il sert aussi
-bien à cartographier les réseaux d'un quartier qu'à inventorier les objets BLE
-d'un bureau, à surveiller un périmètre ou simplement à comprendre ce qui émet
-autour de soi.
+RFSentinel listens to the radio environment around us and makes it readable.
+Plugged into a USB port, it picks up **freely broadcast** frames — Wi-Fi beacons
+and Bluetooth LE advertisements — timestamps them, records them in its own flash,
+and serves them over a built-in web interface. It joins no network, decrypts
+nothing, intercepts no communication: it observes, it records, it displays.
 
-## Aperçu
+Built to fit in a pocket and run without any infrastructure, it is as useful for
+mapping the networks of a neighbourhood as for inventorying the BLE objects in an
+office, for watching a perimeter, or simply for understanding what is transmitting
+around you.
 
-La page des observations, en entier :
 
-<p align="center"><img src="screen/Scan.png" alt="Page des observations" width="600"></p>
+## Overview
 
-| Configuration | Connexion |
+The observations page, in full:
+
+<p align="center"><img src="screen/Scan.png" alt="Observations page" width="600"></p>
+
+| Configuration | Login |
 |---|---|
-| <img src="screen/Config.png" alt="Page de configuration" width="470"> | <img src="screen/Login.png" alt="Page de connexion" width="470"> |
+| <img src="screen/Config.png" alt="Configuration page" width="470"> | <img src="screen/Login.png" alt="Login page" width="470"> |
 
-Sur la carte, avec son boîtier transparent — à gauche l'écran de démarrage, qui
-reste allumé une minute avant de s'éteindre et de libérer la mémoire utilisée par
-le scan :
+On the board, in its transparent case — on the left the boot screen, which stays
+lit for one minute before switching off and releasing the memory used by scanning:
 
-| Démarrage | Écran d'état |
+| Boot | Status screen |
 |---|---|
-| <img src="screen/T-Dongel-S3-Boot.jpeg" alt="Écran de démarrage" width="290"> | <img src="screen/T-Dongel-S3-ecran.jpeg" alt="Écran d'état" width="510"> |
+| <img src="screen/T-Dongel-S3-Boot.jpeg" alt="Boot screen" width="290"> | <img src="screen/T-Dongel-S3-ecran.jpeg" alt="Status screen" width="510"> |
 
-## Fonctionnalités
+## Features
 
 **Capture**
 
-- Scan Wi-Fi 2.4 GHz **entièrement passif** (`WIFI_SCAN_TYPE_PASSIVE`) : aucun
-  probe request émis, aucune association. Cycle de 4 s, jusqu'à 40 réseaux par cycle.
-- Scan Bluetooth LE par advertisements (NimBLE, `filter_duplicates` activé) :
-  10 s toutes les 20 s, sans jamais établir de connexion.
-- Deux seuils RSSI indépendants : le seuil d'**enregistrement** et le seuil
-  d'**alerte MQTT**, pour garder les émetteurs lointains sans être alerté par eux.
-- Déduplication en RAM avec redécouverte paramétrable : un équipement redevient
-  « nouveau » après N minutes d'absence.
-- Liste d'**exclusions** (blacklist) par MAC, persistée, pour ignorer définitivement
-  les équipements « à porte ».
+- **Fully passive** 2.4 GHz Wi-Fi scanning (`WIFI_SCAN_TYPE_PASSIVE`): no probe
+  request is sent, no association is made. A 4 s cycle, up to 40 networks per cycle.
+- Bluetooth LE scanning by advertisements (NimBLE, `filter_duplicates` enabled):
+  10 s every 20 s, never establishing a connection.
+- Two independent RSSI thresholds: one for **recording**, one for **MQTT alerting**,
+  so distant transmitters stay in the journal without triggering alerts.
+- De-duplication in RAM with configurable rediscovery: a device becomes "new" again
+  after N minutes of absence.
+- Persistent MAC **exclusion list** (blacklist) to ignore the devices next door for good.
 
-**Journalisation**
+**Logging**
 
-- Format **CSV compatible WiGLE** (`WigleWifi-1.6`) : les fichiers produits se
-  réimportent tels quels sur WiGLE.net ou dans tout outil lisant ce format.
-- Stockage **LittleFS** sur une partition interne de 13 Mo, un fichier par jour,
-  segments de 32 Ko, plafond de 32 fichiers et rotation qui ne touche jamais
-  qu'aux fichiers les plus anciens.
-- Les écritures sont journalisées : une coupure d'alimentation ne corrompt pas
-  ce qui a déjà été enregistré, et rien n'est effacé au redémarrage.
-- **Export CSV** téléchargeable par plage de dates, directement depuis la WebUI.
-- **Purge par plage de dates** : on choisit la période à supprimer, rien ne part
-  à l'aveugle.
+- **WiGLE-compatible CSV** format (`WigleWifi-1.6`): the files produced re-import
+  as-is into WiGLE.net or any tool that reads that format.
+- **LittleFS** storage on a 13 MB internal partition, one file per day, 32 KB
+  segments, a ceiling of 32 files, and rotation that only ever touches the oldest files.
+- Writes are journaled: a power cut does not corrupt what has already been recorded,
+  and nothing is erased on restart.
+- **CSV export** downloadable by date range, straight from the WebUI.
+- **Purge by date range**: you choose the period to delete, nothing goes blindly.
 
-**Interface Web embarquée**
+**Built-in web interface**
 
-- Application mono-fichier servie par le dongle lui-même : aucune dépendance
-  externe critique, aucune installation sur le poste client.
-- **Bilingue français / anglais** et **thème clair ou sombre**, tous deux
-  mémorisés localement dans le navigateur.
-- État en direct : mode réseau, IP, qualité de l'horloge, compteurs Wi-Fi et BLE,
-  occupation du journal, état MQTT.
-- Observations paginées (10 par page), filtrées par type et par plage de dates,
-  triables.
-- **Historique par équipement** : toutes les apparitions d'une adresse MAC, avec
-  sélection directe sur la carte.
-- **Carte** rendue en `<canvas>` avec tuiles OpenStreetMap et géocodage
-  **adresse → coordonnées** via la base adresse nationale française (FR).
-- Consultation **WiGLE intégrée** : pour un MAC donné, ce que WiGLE sait déjà —
-  date, RSSI, nom, type, position — affiché à part des observations locales.
-- **Calibration BLE sur le terrain** : on saisit l'adresse d'un appareil que l'on
-  porte, on mesure en l'éloignant, et l'outil propose le seuil d'enregistrement et
-  le seuil d'alerte adaptés.
+- Single-file application served by the dongle itself: no critical external
+  dependency, nothing to install on the client machine.
+- **Bilingual French / English** and **light or dark theme**, both remembered locally
+  in the browser.
+- Live state: network mode, IP, clock quality, Wi-Fi and BLE counters, journal usage,
+  MQTT state.
+- Paginated observations (10 per page), filtered by type and date range, sortable.
+- **Per-device history**: every appearance of a MAC address, with direct selection
+  on the map.
+- **Map** rendered in a `<canvas>` with OpenStreetMap tiles and **address →
+  coordinates** geocoding through the French national address database.
+- **Built-in WiGLE lookup**: for a given MAC, what WiGLE already knows — date, RSSI,
+  name, type, position — shown separately from local observations.
+- **Field BLE calibration**: enter the address of a device you are carrying, measure
+  while walking away, and the tool proposes suitable recording and alert thresholds.
 
-**Autonomie et intégration**
+**Standalone operation and integration**
 
-- Fonctionne **sans réseau** : si le Wi-Fi configuré est injoignable, le dongle
-  bascule en point d'accès de secours et l'interface reste accessible, scans compris.
-- Horloge NTP avec référence temporelle persistée et **horodatage estimé** hors
-  ligne. La qualité du temps est toujours affichée : `NTP_SYNCED`, `ESTIMATED`
-  ou `UNKNOWN` — jamais une heure incertaine n'est présentée comme exacte.
-- **Upload WiGLE manuel uniquement**, avec confirmation, suivi de progression et
-  résultat détaillé. Aucun envoi automatique.
-- **Alertes MQTT** : broker, port, identifiants, sujet, client ID et TLS
-  configurables, reconnexion automatique, QoS 1. Les scans et la journalisation
-  continuent même sans broker joignable.
-- **Alertes de présence** : on déclare des adresses MAC à surveiller, chacune avec
-  un libellé. Elles déclenchent une alerte MQTT à la détection quel que soit
-  le niveau de signal, puis une alerte de retour après absence (120 s par défaut).
-  Le sujet et la durée d'absence se règlent à part, et la surveillance reste
-  active même si l'appareil est exclu du journal.
-- Écran **ST7735 160×80** : écran de démarrage avec logo, version, mode et IP,
-  puis écran d'état. L'écran s'éteint **au bout d'une minute** et libère alors
-  les 25,6 Ko de RAM DMA réservés à l'affichage. C'est ce qui rend les requêtes
-  WiGLE possibles : il faut donc attendre l'extinction de l'écran avant de
-  consulter l'historique d'un équipement sur WiGLE.
+- Works **without a network**: if the configured Wi-Fi is unreachable, the dongle
+  falls back to a rescue access point and the interface stays available, scans included.
+- NTP clock with a persisted time reference and **estimated timestamps** offline.
+  Time quality is always displayed — `NTP_SYNCED`, `ESTIMATED` or `UNKNOWN` —
+  an uncertain time is never presented as exact.
+- **Manual WiGLE upload only**, with confirmation, progress tracking and a detailed
+  result. No automatic sending, ever.
+- **MQTT alerts**: broker, port, credentials, topic, client ID and TLS configurable,
+  automatic reconnection, QoS 1. Scanning and logging continue even when no broker
+  is reachable.
+- **Presence alerts**: declare MAC addresses to watch, each with a label. They trigger
+  an MQTT alert on detection regardless of signal level, then a return alert after an
+  absence (120 s by default). The topic and the absence window are set separately, and
+  monitoring stays active even if the device is excluded from the journal.
+- **ST7735 160×80 screen**: boot screen with logo, version, mode and IP, then a status
+  screen. The display switches off **after one minute** and releases the 25.6 KB of DMA
+  RAM reserved for rendering. That is what makes WiGLE queries possible: wait for the
+  screen to go dark before consulting a device's WiGLE history.
 
-## Matériel
+## Hardware
 
-| Élément | Valeur |
+| Item | Value |
 |---|---|
-| Carte | **LilyGO T-Dongle S3** (ESP32-S3) |
-| Flash | **16 Mo** interne — pas de carte SD |
-| PSRAM | aucune, tout est dimensionné en RAM interne |
-| Écran | ST7735, piloté en **160×80** paysage, rendu 1 bpp |
-| Radio | Wi-Fi 2.4 GHz (passif) + Bluetooth LE (observeur) |
-| GPS | aucun — la position est saisie manuellement ou par recherche d'adresse |
-| Alimentation | USB-C, avec USB-Serial-JTAG intégré |
+| Board | **LilyGO T-Dongle S3** (ESP32-S3) |
+| Flash | **16 MB** internal — no SD card |
+| PSRAM | none, everything is sized for internal RAM |
+| Display | ST7735, driven at **160×80** landscape, 1 bpp rendering |
+| Radio | Wi-Fi 2.4 GHz (passive) + Bluetooth LE (observer) |
+| GPS | none — position is entered manually or from an address lookup |
+| Power | USB-C, with built-in USB-Serial-JTAG |
 
-Pins de l'écran, telles que câblées sur la T-Dongle S3 :
+Display pins, as wired on the T-Dongle S3:
 
 ```
-CLK 5 · MOSI 3 · DC 2 · RST 1 · CS 4 · rétroéclairage 38
+CLK 5 · MOSI 3 · DC 2 · RST 1 · CS 4 · backlight 38
 ```
 
-## Prise en main
+## Getting started
 
-1. Brancher le dongle. L'écran affiche le logo, la version, le mode et l'IP.
-2. Sans réseau configuré (ou en cas d'échec de connexion), le dongle émet le
-   point d'accès **`RFSentinel-Setup`** (mot de passe `012345678`).
-3. S'y connecter, puis ouvrir **http://192.168.4.1**.
-4. Se connecter avec `admin` / `admin`. Le changement de mot de passe est
-   **imposé** à la première connexion.
-5. Configurer le réseau Wi-Fi, la position, les seuils, WiGLE, MQTT, la langue et
-   le fuseau. Tout est écrit en NVS et survit aux redémarrages.
+1. Plug in the dongle. The screen shows the logo, version, mode and IP.
+2. With no network configured (or after a connection failure), the dongle
+   broadcasts the access point **`RFSentinel-Setup`** (password `012345678`).
+3. Join it, then open **http://192.168.4.1**.
+4. Log in with `admin` / `admin`. Changing the password is **forced** on first login.
+5. Set up the Wi-Fi network, position, thresholds, WiGLE, MQTT, language and
+   timezone. Everything is written to NVS and survives reboots.
 
-## Construction
+## Building
 
-Le projet est en **ESP-IDF v5.3.2**, cible `esp32s3`. Les dépendances sont figées
-(`idf_component.yml` + `dependencies.lock`, notamment `joltwallet/littlefs ==1.23.1`),
-donc un build est reproductible.
+The project targets **ESP-IDF v5.3.2**, chip `esp32s3`. Dependencies are pinned
+(`idf_component.yml` + `dependencies.lock`, notably `joltwallet/littlefs ==1.23.1`),
+so a build is reproducible.
 
 ```bash
 idf.py set-target esp32s3
@@ -160,286 +153,365 @@ idf.py reconfigure
 idf.py build
 ```
 
-La configuration de build est fixée dans `sdkconfig.defaults` : flash 16 Mo, table
-de partitions personnalisée, NimBLE en mode observeur, mbedTLS avec bundle CA
-complet pour HTTPS, serveur HTTP embarqué.
+The build configuration is fixed in `sdkconfig.defaults`: 16 MB flash, custom
+partition table, NimBLE in observer mode, mbedTLS with the full CA bundle for
+HTTPS, embedded HTTP server.
 
-### Table de partitions
+### Partition table
 
-| Partition | Type | Offset | Taille |
+| Partition | Type | Offset | Size |
 |---|---|---|---|
-| `nvs` | data/nvs | `0x9000` | 24 Ko |
-| `phy_init` | data/phy | `0xf000` | 4 Ko |
-| `factory` | app | `0x10000` | 3 Mo |
-| `storage` | data/littlefs | `0x310000` | 13 Mo (`0xCF0000`) |
+| `nvs` | data/nvs | `0x9000` | 24 KB |
+| `phy_init` | data/phy | `0xf000` | 4 KB |
+| `factory` | app | `0x10000` | 3 MB |
+| `storage` | data/littlefs | `0x310000` | 13 MB (`0xCF0000`) |
 
-## Flash
+## Firmware binaries
 
-Les binaires de la version 1.0.0 sont joints à la
-[release](https://github.com/M3r020j1/rfsentinel/releases/tag/v1.0.0).
-Paramètres de flash :
-`--flash_mode dio --flash_freq 80m --flash_size 16MB`.
+The three images for the current version are in the [`bin/`](bin) folder, next to a
+`SHA256SUMS` file, so you can flash without compiling:
 
-| Adresse | Fichier | Taille |
-|---|---|---|
-| `0x0` | `bootloader.bin` | 21 648 o |
-| `0x8000` | `partition-table.bin` | 3 072 o |
-| `0x10000` | `rfsentinel.bin` | 1 477 360 o |
+| Address | File | Size | SHA-256 |
+|---|---|---|---|
+| `0x0` | `bootloader.bin` | 21,648 B | `f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297` |
+| `0x8000` | `partition-table.bin` | 3,072 B | `4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913` |
+| `0x10000` | `rfsentinel.bin` | 1,477,360 B | `c941ce1609143e41caa2b0b97972588a19b94f421c2b8fd5329a90a2b829d3f7` |
 
-Empreintes SHA-256 des binaires de la version 1.0.0 :
+Verify them before writing:
 
+```bash
+cd bin && shasum -a 256 -c SHA256SUMS     # Linux and macOS
 ```
-f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297  bootloader.bin
-4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913  partition-table.bin
-c941ce1609143e41caa2b0b97972588a19b94f421c2b8fd5329a90a2b829d3f7  rfsentinel.bin
+
+On Windows, PowerShell prints the same hash with `Get-FileHash`.
+
+`webtool/firmware/` holds the same three images plus the manifest used by the
+browser flasher. `tools/package_webtool_firmware.py` refreshes both folders in one
+pass and cross-checks the hashes, so `bin/` and `webtool/firmware/` never drift apart.
+
+## Flashing with esptool
+
+Flash parameters are the same everywhere: `--flash-mode dio --flash-freq 80m
+--flash-size 16MB`, at addresses `0x0`, `0x8000` and `0x10000`.
+
+> **Check the exact board model before writing to flash.** A 16 MB partition table
+> on an 8 MB board leaves the device unusable. The LilyGO T-Dongle S3 targeted here
+> has 16 MB, but smaller variants exist with the same case and the same look.
+
+### Install the tool
+
+**Linux** (Debian, Ubuntu and derivatives — PEP 668 blocks a bare `pip install`,
+so use a virtual environment):
+
+```bash
+sudo apt install python3-venv
+python3 -m venv ~/.venvs/esptool
+~/.venvs/esptool/bin/pip install esptool
+~/.venvs/esptool/bin/esptool version
+```
+
+Allow the serial port, then log out and back in:
+
+```bash
+sudo usermod -aG dialout $USER
+```
+
+**macOS** (Homebrew):
+
+```bash
+brew install esptool
+esptool version
+```
+
+**Windows**: install Python from python.org, then in PowerShell:
+
+```powershell
+py -m pip install esptool
+py -m esptool version
+```
+
+The dongle uses the ESP32-S3 built-in USB-Serial-JTAG, so no external converter
+driver is needed and Windows 10/11 usually installs it through Windows Update. Device
+Manager should show **USB Serial Device (COMx)** under Ports (COM & LPT). If the port
+is missing, install the Espressif drivers with the Espressif Installation Manager
+(`eim install-drivers`). If Zadig is suggested, leave interface 0 on the USB Serial
+(CDC) driver: putting WinUSB on interface 0 makes the COM port disappear. WinUSB
+belongs on the JTAG interface only, and esptool does not need it to flash.
+
+If you already have ESP-IDF, it ships its own esptool, so no extra install is needed.
+From the project root, `idf.py -p PORT flash` writes the same three images at
+the same addresses, reading them from `build/` instead of `bin/`.
+
+### Port names
+
+| System | Typical port |
+|---|---|
+| Linux | `/dev/ttyACM0` (sometimes `/dev/ttyUSB0` through a converter) |
+| macOS | `/dev/tty.usbmodem…` — check with `ls /dev/tty.usb*` |
+| Windows | `COM3`, `COM4`… — check in Device Manager |
+
+### Write the three images
+
+esptool 5 uses dashes. This is the form to type:
+
+```bash
+# Linux
+esptool --chip esp32s3 -p /dev/ttyACM0 -b 460800 --before default-reset --after hard-reset \
+  write-flash --flash-mode dio --flash-freq 80m --flash-size 16MB \
+  0x0 bin/bootloader.bin 0x8000 bin/partition-table.bin 0x10000 bin/rfsentinel.bin
 ```
 
 ```bash
-esptool.py --chip esp32s3 -p /dev/ttyACM0 -b 460800 --before default_reset \
-  --after hard_reset write_flash \
-  --flash_mode dio --flash_freq 80m --flash_size 16MB \
-  0x0 bootloader.bin \
-  0x8000 partition-table.bin \
-  0x10000 rfsentinel.bin
+# macOS — run from the repository root, port taken from ls /dev/tty.usb*
+esptool --chip esp32s3 -p /dev/tty.usbmodem31401 -b 460800 \
+  --before default-reset --after hard-reset \
+  write-flash --flash-mode dio --flash-freq 80m --flash-size 16MB \
+  0x0 bin/bootloader.bin 0x8000 bin/partition-table.bin 0x10000 bin/rfsentinel.bin
 ```
 
-Par `idf.py -p /dev/ttyACM0 flash`, le projet écrit les trois mêmes zones.
+```powershell
+# Windows — same command, backticks for line continuation
+py -m esptool --chip esp32s3 -p COM3 -b 460800 --before default-reset --after hard-reset `
+  write-flash --flash-mode dio --flash-freq 80m --flash-size 16MB `
+  0x0 bin\bootloader.bin 0x8000 bin\partition-table.bin 0x10000 bin\rfsentinel.bin
+```
 
-> Vérifier le modèle exact avant d'écrire dans la flash. Une table de partitions
-> de 16 Mo sur une carte de 8 Mo rendrait l'appareil inopérant.
+If your esptool came from ESP-IDF 5.3 rather than a recent standalone install, it is
+version 4.x and expects underscores: `write_flash`, `--flash_mode`, `--flash_freq`,
+`--flash_size`, `--before default_reset`, `--after hard_reset`, and the program is
+named `esptool.py`. Those spellings still work on esptool 5, which accepts them with a
+deprecation warning, so the same old command keeps running after an upgrade.
 
-## Flasher depuis le navigateur
+If the port list is empty or the tool cannot connect, hold the BOOT button while
+plugging the dongle in, then retry.
 
-`webtool/index.html` écrit le firmware dans le dongle depuis Google Chrome ou
-Microsoft Edge, sans rien installer : la page pilote le port série par l'API
-Web Serial et s'appuie sur [esptool-js](https://github.com/espressif/esptool-js)
-0.7.1, chargé en local depuis `webtool/vendor/esptool-js/`. Aucun CDN, aucun
-serveur intermédiaire : les images viennent du dépôt ou de votre disque, et leur
-empreinte SHA-256 est vérifiée avant l'écriture.
+## Flashing from the browser
 
-Ouvrir le fichier directement (double-clic) ou le servir localement :
+`webtool/index.html` writes the firmware into the dongle from Google Chrome or
+Microsoft Edge with nothing installed: the page drives the serial port through the
+Web Serial API and relies on [esptool-js](https://github.com/espressif/esptool-js)
+0.7.1, loaded locally from `webtool/vendor/esptool-js/`. No CDN, no intermediate
+server: the images come from the repository or from your own disk, and their SHA-256
+is verified before anything is written.
+
+Open the file directly (double-click) or serve it locally:
 
 ```bash
-python3 -m http.server 8000     # puis http://localhost:8000/webtool/
+python3 -m http.server 8000     # then http://localhost:8000/webtool/
 ```
 
-La page fonctionne en `file://`, en HTTPS et sur `localhost` ; ailleurs le
-navigateur refuse l'accès au port série.
+The page works over `file://`, over HTTPS and on `localhost`; elsewhere the browser
+refuses access to the serial port.
 
-1. Choisir la source des images : le dépôt (manifeste et trois fichiers, avec
-   contrôle SHA-256) ou trois fichiers `.bin` pris sur votre disque.
-2. Brancher le dongle, cliquer sur « Choisir le port », sélectionner
-   `USB JTAG/serial debug unit`. Si la liste est vide, maintenir BOOT pendant
-   le branchement.
-3. Confirmer la taille réelle de la mémoire, puis écrire. La page lit la puce et
-   la capacité avant toute écriture et refuse une carte qui n'est pas une
-   ESP32-S3 avec 16 Mo.
+1. Choose where the images come from: the repository (manifest plus three files, with
+   SHA-256 verification) or three `.bin` files taken from your disk.
+2. Plug in the dongle, click "Choose port", select `USB JTAG/serial debug unit`. If
+   the list is empty, hold BOOT while plugging it in.
+3. Confirm the actual memory size, then write. The page reads the chip and its
+   capacity before any write and refuses a board that is not an ESP32-S3 with 16 MB.
 
-Le plan d'écriture est figé dans la page (`dio` / `80 MHz` / `16 MB`, aux
-adresses `0x0`, `0x8000` et `0x10000`), et un manifeste ne peut pas le
-modifier : c'est la seule barrière contre une carte de 8 Mo. Après l'écriture,
-l'empreinte MD5 relue dans la flash est comparée à celle de l'image envoyée.
+The write plan is hard-coded in the page (`dio` / `80 MHz` / `16 MB`, at addresses
+`0x0`, `0x8000` and `0x10000`), and a manifest cannot change it: that is the only
+barrier against an 8 MB board. After writing, the MD5 fingerprint read back from flash
+is compared with the one of the image that was sent.
 
-Le mode « Depuis le dépôt » lit le firmware dans `webtool/firmware/`, que le
-dépôt doit contenir. Le régénérer après chaque compilation :
+The "From repository" mode reads the firmware from `webtool/firmware/`, which the
+repository must contain. Regenerate it after every build:
 
 ```bash
 idf.py build
-python3 tools/package_webtool_firmware.py    # remplit webtool/firmware/
-python3 tools/make_webtool_vendor.py         # si la version d'esptool-js change
+python3 tools/package_webtool_firmware.py    # refreshes bin/ and webtool/firmware/
+python3 tools/make_webtool_vendor.py         # only when the esptool-js version changes
 ```
 
-Les tailles et empreintes du § Flash décrivent les binaires joints à la release
-v1.0.0. Le dossier `webtool/firmware/` porte le dernier build et sa propre
-liste `SHA256SUMS` ; les deux jeux diffèrent dès qu'une recompilation change
-`rfsentinel.bin`. Le flasher navigateur vérifie l'empreinte annoncée par le
-manifeste qu'il charge, pas celle du tableau.
+The sizes and fingerprints in the two sections above describe the images in `bin/`.
+The browser flasher verifies the fingerprint announced by the manifest it loads.
 
-> Les pièces jointes d'une publication GitHub ne renvoient pas d'en-tête
-> `Access-Control-Allow-Origin` : le mode en ligne ne peut pas les charger. Le
-> firmware doit donc être lu depuis les fichiers bruts du dépôt ou une page
-> GitHub Pages, qui autorisent les requêtes croisées.
+> GitHub release attachments do not return an `Access-Control-Allow-Origin` header, so
+> the online mode cannot load them. The firmware has to be read from the raw files of
+> the repository or from a GitHub Pages site, both of which allow cross-origin requests.
 
-## API Web
+## Web API
 
-Toutes les routes `/api/*` exigent une session authentifiée, à l'exception de
-`/api/login`. La session est un cookie `sid` en `HttpOnly`, `SameSite=Strict`,
-d'une heure, avec temporisation de 30 s après échecs répétés.
+Every `/api/*` route requires an authenticated session, except `/api/login`. The
+session is a `sid` cookie, `HttpOnly`, `SameSite=Strict`, valid for one hour, with a
+30 s lockout after repeated failures.
 
-| Méthode | Route | Rôle |
+| Method | Route | Purpose |
 |---|---|---|
-| GET | `/` | interface Web (HTML embarqué) |
+| GET | `/` | web interface (embedded HTML) |
 | GET | `/logo/rfsentinel-logo.svg` | logo |
-| GET | `/logo/rfsentinel-icon.svg` | icône |
-| POST | `/api/login` | connexion (`{user, pass}`) → cookie de session |
-| POST | `/api/logout` | déconnexion |
-| GET | `/api/config` | lecture de la configuration, secrets masqués |
-| POST | `/api/config` | mise à jour (fusion partielle, validation interne) |
-| GET | `/api/scan/status` | mode, IP, heure et qualité, compteurs, journal, MQTT |
-| POST | `/api/scan/start` | démarrer les scans |
-| POST | `/api/scan/stop` | arrêter les scans |
-| GET | `/api/observations` | liste paginée — `page`, `type`, `sort`, `dir`, `cursor`, `from`, `to` |
-| GET | `/api/history` | apparitions d'une MAC (`mac`) |
-| GET | `/api/presence` | appareils surveillés, sujet et durée d'absence |
-| POST | `/api/presence` | ajouter ou retirer un appareil surveillé (`action`, `mac`, `label`) |
-| GET | `/api/blacklist` | liste des exclusions |
-| POST | `/api/blacklist/add` | ajouter une exclusion (`{mac, label}`) |
-| POST | `/api/blacklist/remove` | retirer une exclusion (`{mac}`) |
-| POST | `/api/wigle/upload` | déclencher l'upload manuel vers WiGLE |
-| GET | `/api/wigle/upload/status` | progression et résultat de l'upload |
-| GET | `/api/wigle` | ce que WiGLE connaît pour une MAC (`mac`) |
-| POST | `/api/purge` | purge par plage de dates (`{from, to}`) |
-| GET | `/api/purge/status` | progression de la purge |
-| GET | `/api/calibration` | état de la calibration en cours |
-| POST | `/api/calibration` | démarrer, alimenter ou terminer une mesure |
-| GET | `/api/calibration/find` | recherche d'un appareil BLE proche (`mac`) |
-| GET | `/api/export` | export CSV du journal (`from`, `to`) en pièce jointe |
-| GET | `/api/time` | heure courante et qualité d'horodatage |
-| POST | `/api/time` | réglage manuel de l'heure |
+| GET | `/logo/rfsentinel-icon.svg` | icon |
+| POST | `/api/login` | login (`{user, pass}`) → session cookie |
+| POST | `/api/logout` | logout |
+| GET | `/api/config` | read configuration, secrets masked |
+| POST | `/api/config` | update (partial merge, validated server-side) |
+| GET | `/api/scan/status` | mode, IP, time and quality, counters, journal, MQTT |
+| POST | `/api/scan/start` | start scanning |
+| POST | `/api/scan/stop` | stop scanning |
+| GET | `/api/observations` | paginated list — `page`, `type`, `sort`, `dir`, `cursor`, `from`, `to` |
+| GET | `/api/history` | appearances of a MAC (`mac`) |
+| GET | `/api/presence` | watched devices, topic and absence window |
+| POST | `/api/presence` | add or remove a watched device (`action`, `mac`, `label`) |
+| GET | `/api/blacklist` | exclusion list |
+| POST | `/api/blacklist/add` | add an exclusion (`{mac, label}`) |
+| POST | `/api/blacklist/remove` | remove an exclusion (`{mac}`) |
+| POST | `/api/wigle/upload` | trigger the manual upload to WiGLE |
+| GET | `/api/wigle/upload/status` | upload progress and result |
+| GET | `/api/wigle` | what WiGLE knows about a MAC (`mac`) |
+| POST | `/api/purge` | purge by date range (`{from, to}`) |
+| GET | `/api/purge/status` | purge progress |
+| GET | `/api/calibration` | state of the running calibration |
+| POST | `/api/calibration` | start, feed or finish a measurement |
+| GET | `/api/calibration/find` | look for a nearby BLE device (`mac`) |
+| GET | `/api/export` | CSV export of the journal (`from`, `to`) as an attachment |
+| GET | `/api/time` | current time and timestamp quality |
+| POST | `/api/time` | manual time setting |
 
 ## WiGLE
 
-Si une recherche WiGLE échoue ou tarde, les scans peuvent être arrêtés temporairement depuis la page Scan, puis redémarrés manuellement ; aucune observation ni alerte de présence ne sera détectée pendant cet arrêt.
+If a WiGLE lookup fails or takes too long, scanning can be paused temporarily from
+the Scan page and restarted by hand; no observation and no presence alert is
+captured while it is paused.
 
-- Upload **manuel** : bouton dédié, confirmation explicite, puis statut intermédiaire
-  jusqu'au résultat. Aucun envoi automatique, jamais.
-- En-tête CSV : `WigleWifi-1.6,apssids=true,latlon=true,lockedToNetwork=false,cellBands=auto`.
-- `lat` / `lon` : les coordonnées configurées dans RFSentinel (le dongle n'a pas de GPS).
-- Recherche Wi-Fi (`network/search`) et Bluetooth (`bluetooth/search`), avec les
-  endpoints `detail` correspondants pour les fiches complètes.
-- Authentification **Basic** sur **HTTPS** (bundle CA complet).
-- Le nom d'API et le token WiGLE ne sortent jamais : ni dans les réponses de l'API,
-  ni dans les journaux, ni dans les exports.
+- Upload is **manual**: dedicated button, explicit confirmation, then intermediate
+  status until the result. Never any automatic sending.
+- CSV header: `WigleWifi-1.6,apssids=true,latlon=true,lockedToNetwork=false,cellBands=auto`.
+- `lat` / `lon`: the coordinates configured in RFSentinel (the dongle has no GPS).
+- Wi-Fi search (`network/search`) and Bluetooth search (`bluetooth/search`), with the
+  matching `detail` endpoints for full records.
+- **Basic** authentication over **HTTPS** (full CA bundle).
+- The WiGLE API name and token never leave the device: not in API responses, not in
+  logs, not in exports.
 
 ## MQTT
 
-Une alerte est publiée pour chaque nouvel équipement dépassant le seuil MQTT, en
-QoS 1, sans retain. Charge utile :
+An alert is published for every new device above the MQTT threshold, QoS 1, no retain:
 
 ```json
 {"device_id":"…","mac":"…","type":"WIFI","ssid":"…","rssi":-72,
  "ts":"2026-11-11 10:50:10","tsq":"NTP_SYNCED","lat":48.85660,"lon":2.35222}
 ```
 
-`tsq` indique la qualité de l'horodatage — `NTP_SYNCED`, `ESTIMATED` ou
-`UNKNOWN` — pour qu'un consommateur puisse écarter les messages mal horodatés :
-dans le dernier cas, `ts` vaut `"0"`.
+`tsq` gives the timestamp quality — `NTP_SYNCED`, `ESTIMATED` or `UNKNOWN` — so a
+consumer can set badly dated messages aside: in the last case `ts` is `"0"`.
 
-Les appareils surveillés publient sur un sujet dédié (`/rfsentinel/presence` par
-défaut), jamais sur le sujet des alertes :
+Watched devices publish on their own topic (`/rfsentinel/presence` by default), never
+on the alert topic:
 
 ```json
 {"event":"presence","device_id":"…","mac":"…","type":"BLE","label":"…",
  "ssid":"…","rssi":-71,"ts":"2026-11-11 10:50:10","tsq":"NTP_SYNCED"}
 ```
 
-`label` reprend le libellé saisi dans l'interface, pour distinguer plusieurs
-appareils surveillés sans avoir à connaître leurs adresses MAC.
+`label` carries the label entered in the interface, which tells several watched devices
+apart without knowing their MAC addresses.
 
-### Interfacer RFSentinel avec Home Assistant
+### Connecting RFSentinel to Home Assistant
 
-RFSentinel **publie** ses événements sur le broker MQTT déclaré dans sa
-configuration. Home Assistant, connecté au même broker par son intégration MQTT,
-**écoute** le topic qui l'intéresse, puis son automatisation **interprète le
-message et exécute les actions configurées**. Aucun composant particulier n'est
-installé côté RFSentinel : il se comporte comme n'importe quel client MQTT, et les
-scénarios se écrivent dans Home Assistant comme avec tout autre broker.
+RFSentinel **publishes** its events to the MQTT broker named in its configuration.
+Home Assistant, joined to the same broker through its MQTT integration, **listens** to
+the topic it cares about, and its automation **reads the message and runs the actions
+you configured**. Nothing special is installed on RFSentinel: it behaves like any other
+MQTT client, and the scenarios are written in Home Assistant exactly as with any other
+broker.
 
-Deux topics sont disponibles :
+Two topics are available:
 
-| Topic | Événement |
+| Topic | Event |
 |---|---|
-| `/rfsentinel/alert` | nouvel équipement détecté |
-| `/rfsentinel/presence` | détection ou retour d'un équipement ajouté à la liste de surveillance |
+| `/rfsentinel/alert` | new device detected |
+| `/rfsentinel/presence` | a device on the watch list was detected, or came back |
 
-Les deux sont modifiables dans la page de configuration, et ne peuvent pas porter
-le même nom. Les messages sont en JSON : une alerte contient le type
-d'équipement, son adresse MAC, le SSID éventuel et le RSSI ; un message de
-présence contient en plus le libellé attribué à l'équipement dans RFSentinel, et
-y affiche `null` plutôt que 127 quand le signal BLE n'est pas mesurable.
+Both names can be changed on the configuration page, and they cannot be the same.
+Messages are JSON: an alert carries the device type, its MAC address, the SSID if any
+and the RSSI; a presence message also carries the label given to the device in
+RFSentinel, and shows `null` rather than 127 when the BLE signal is not measurable.
 
-Côté Home Assistant, créez une automatisation et choisissez **« Lorsqu'un message
-MQTT a été reçu »** comme déclencheur. Saisissez le topic à écouter, par exemple
-`/rfsentinel/alert`. Ajoutez ensuite une action : notification persistante,
-envoi vers un téléphone, pilotage d'un appareil. Pour reprendre les informations
-du message dans une notification, un modèle tel que :
+In Home Assistant, create an automation and pick **"When an MQTT message has been
+received"** as the trigger. Enter the topic to listen to, for example
+`/rfsentinel/alert`. Then add an action: a persistent notification, a push to a phone,
+controlling a device. To reuse the message fields in a notification, a template such as:
 
 ```yaml
-{{ trigger.payload_json.type }} détecté — SSID : {{ trigger.payload_json.ssid or 'inconnu' }} — MAC : {{ trigger.payload_json.mac }} — RSSI : {{ trigger.payload_json.rssi }} dBm
+{{ trigger.payload_json.type }} detected — SSID: {{ trigger.payload_json.ssid or 'unknown' }} — MAC: {{ trigger.payload_json.mac }} — RSSI: {{ trigger.payload_json.rssi }} dBm
 ```
 
-Le modèle lit les champs du JSON reçu au moment du déclenchement. Des conditions
-peuvent filtrer par adresse MAC ou par type avant de passer à l'action : allumer
-une lumière, faire parler un assistant vocal, envoyer une alerte sur mobile.
-Prenez une automatisation par topic si vous voulez traiter différemment les
-nouveaux équipements et les appareils surveillés.
+The template reads the fields of the JSON received at trigger time. Conditions can
+filter by MAC address or by type before the action runs: switch on a light, have a
+voice assistant speak, send an alert to a phone. Use one automation per topic if you
+want to treat new devices and watched devices differently.
 
-Ces alertes réagissent aussi à la présence : tant qu'un équipement surveillé est
-absent depuis `absence_s` (120 s par défaut), son retour déclenche une nouvelle
-publication sur le topic de présence.
+Presence alerts also react to absence: while a watched device has been away for
+`absence_s` (120 s by default), its return triggers a new publication on the presence
+topic.
 
-## Confidentialité et sécurité
+## Privacy and security
 
-- **Observation seule** : pas de connexion aux réseaux détectés, pas de
-  déchiffrement, pas d'interaction avec les appareils Bluetooth.
-- **Secrets stockés en NVS**, jamais relus en clair par l'interface : les six champs
-  sensibles (mot de passe WebUI, nom et token WiGLE, clé Wi-Fi, mot de passe du
-  point d'accès, mot de passe MQTT) affichent huit points quand une valeur est déjà
-  enregistrée. L'œil révèle la **saisie en cours**, pas la valeur stockée.
-- Un champ laissé **vide** conserve la valeur enregistrée : on ne peut pas
-  écraser un secret par inadvertance.
-- Authentification obligatoire, cookie `HttpOnly` + `SameSite=Strict`,
-  temporisation après échecs, `admin/admin` forcé au premier lancement.
-- Le cadre légal appartient à l'utilisateur : RFSentinel n'observe que des trames
-  librement diffusées, mais la capture de données radio et l'usage qui en est fait
-  sont réglementés selon les pays.
+- **Observation only**: no connection to the networks it detects, no decryption, no
+  interaction with Bluetooth devices.
+- **Secrets stored in NVS**, never read back in clear by the interface: the six
+  sensitive fields (WebUI password, WiGLE API name and token, Wi-Fi key, access point
+  password, MQTT password) show eight dots when a value is already saved. The eye icon
+  reveals **what you are typing**, not the stored value.
+- A field left **empty** keeps the saved value: a secret cannot be overwritten by
+  accident.
+- Authentication is mandatory, cookie `HttpOnly` + `SameSite=Strict`, lockout after
+  repeated failures, `admin/admin` forced on first run with a required password change.
+- The legal framework belongs to the user: RFSentinel only observes freely broadcast
+  frames, but capturing radio data and what you do with it is regulated differently
+  from one country to another.
 
-## Arborescence
+## Repository layout
 
 ```
-CMakeLists.txt          projet ESP-IDF
-partitions.csv          table de partitions (nvs, phy_init, factory, storage)
-sdkconfig.defaults      configuration de build figée
-idf_component.yml       dépendances (littlefs 1.23.1) · dependencies.lock verrou
+CMakeLists.txt          ESP-IDF project
+partitions.csv          partition table (nvs, phy_init, factory, storage)
+sdkconfig.defaults      pinned build configuration
+idf_component.yml       dependencies (littlefs 1.23.1) · dependencies.lock lockfile
+README.md               this page (English)
+DOCUMENTATION.md        architecture, trade-offs, constants (English)
+LICENSE                 CC BY-NC-SA 4.0
+bin/                    firmware images of the current version + SHA256SUMS
+docs/fr/                French README and documentation
 main/
-  main.c                démarrage, boucle principale
+  main.c                startup, main loop
   version.h             RFS_VERSION "1.0.0"
-  config.[ch]           configuration NVS, secrets, validation
-  net.[ch]              STA + AP de secours, NTP, qualité d'horodatage
-  scanner.[ch]          scans passifs Wi-Fi et BLE, seuils, dédup, calibration
-  store.[ch]            journal LittleFS /rfs/observations, rotation, purge, export
-  web.[ch]              serveur HTTP + API JSON
-  ui/index.html         interface Web embarquée (FR/EN, clair/sombre)
-  wigle.[ch]            upload et recherche WiGLE (API v2, HTTPS)
-  auth.[ch]             sessions WebUI, anti brute-force
-  mqtt.[ch]             alertes MQTT
-  presence.[ch]         adresses surveillées, alertes de présence
-  display.[ch]          écran ST7735 : démarrage, état, extinction auto
-  oled_font.h           table de glyphes 8×16
-  oled_logo.h           logo 128×64 en bitmap 1 bpp
-  lcd/                  driver ST7735
-logo/                   SVG (embarqués pour la WebUI, source du bitmap écran)
+  config.[ch]           NVS configuration, secrets, validation
+  net.[ch]              STA + rescue AP, NTP, timestamp quality
+  scanner.[ch]          passive Wi-Fi and BLE scans, thresholds, de-dup, calibration
+  store.[ch]            LittleFS journal /rfs/observations, rotation, purge, export
+  web.[ch]              HTTP server + JSON API
+  ui/index.html         embedded web interface (FR/EN, light/dark)
+  wigle.[ch]            WiGLE upload and lookup (API v2, HTTPS)
+  auth.[ch]             WebUI sessions, anti brute-force
+  mqtt.[ch]             MQTT alerts
+  presence.[ch]         watched addresses, presence alerts
+  display.[ch]          ST7735 screen: boot, status, auto-off
+  oled_font.h           8×16 glyph table
+  oled_logo.h           64×64 logo as a 1 bpp bitmap
+  lcd/                  ST7735 driver
+logo/                   SVG (embedded for the WebUI, source of the screen bitmap)
+screen/                 screenshots used on this page
 webtool/
-  index.html              flasher navigateur (Chrome/Edge, Web Serial)
-  vendor/esptool-js/      moteur d'écriture, copie locale générée
-  firmware/               images et manifeste servis au flasher
-tools/make_webtool_vendor.py       bundle esptool-js en script classique
-tools/package_webtool_firmware.py  remplit webtool/firmware/
-tools/generate_lcd_logo.py  conversion SVG → bitmap 1 bpp pour l'écran
-tests/                  tests exécutés sur l'hôte (logique, API, interface)
-screen/                 captures d'écran
-DOCUMENTATION.md        architecture, choix techniques, constantes, reprise
+  index.html              browser flasher (Chrome/Edge, Web Serial)
+  vendor/esptool-js/      write engine, generated local copy
+  firmware/               images and manifest served to the flasher
+tools/make_webtool_vendor.py       bundle esptool-js as a classic script
+tools/package_webtool_firmware.py  fills bin/ and webtool/firmware/
+tools/generate_lcd_logo.py         SVG → 1 bpp bitmap for the screen
+tests/                  host-side tests (logic, API, interface)
 ```
 
 ## Tests
 
-Vingt-six programmes autonomes tournent sur la machine de développement, sans
-ESP-IDF ni carte : dix-huit en Python, sept en JavaScript avec Node, un en C. Ils
-couvrent la logique qui ne dépend pas du matériel — journal et rotation, export CSV,
-calibration et ses seuils, seuil et déduplication MQTT, équipements surveillés et
-alertes de présence, recomptage, accès concurrents, itération LittleFS, recherches
-WiGLE en allocations simulées, durée de vie du framebuffer lors de l'extinction de
-l'écran, et les comportements de l'interface.
+Twenty-six standalone programs run on the development machine, with no ESP-IDF and no
+board: eighteen in Python, seven in JavaScript with Node, one in C. They cover the
+logic that does not depend on hardware — journal and rotation, CSV export, calibration
+and its thresholds, MQTT threshold and de-duplication, watched devices and presence
+alerts, recounting, concurrent access, LittleFS iteration, WiGLE lookups under
+simulated allocations, framebuffer lifetime when the screen switches off, and the
+behaviours of the interface.
 
 ```bash
 for t in tests/test_*.py; do python3 "$t"; done
@@ -450,48 +522,48 @@ cc -I"$LFS" tests/test_littlefs_iter_host.c "$LFS/lfs.c" "$LFS/lfs_util.c" \
    -o /tmp/lfs_iter && /tmp/lfs_iter
 ```
 
-Le test en C se compile contre la bibliothèque LittleFS récupérée par ESP-IDF : il
-faut donc avoir lancé au moins une fois `idf.py reconfigure`. Les vingt-cinq
-autres se lancent tels quels.
+The C test compiles against the LittleFS library fetched by ESP-IDF, so
+`idf.py reconfigure` has to have run at least once. The other twenty-five start as
+they are.
 
-## Limites connues
+## Known limitations
 
-- L'ESP32-S3 n'a pas d'horloge temps réel sauvegardée : hors tension et sans NTP,
-  l'heure n'est qu'une estimation, signalée comme telle.
-- Wi-Fi et BLE partagent la même radio 2.4 GHz : les scans se répartissent le
-  temps radio. L'interface Web reste disponible pendant les scans.
-- L'écran 160×80 ne peut pas afficher un SVG : le logo est converti hors cible en
-  bitmap 1 bpp par `tools/generate_lcd_logo.py`.
-- Un équipement peu capté peut être absent du journal comme de WiGLE : l'absence
-  dans la liste ne prouve pas l'absence d'émetteur.
-- La position dépend de la configuration : sans coordonnées saisies, les
-  observations sont horodatées mais non localisées.
+- The ESP32-S3 has no battery-backed real-time clock: without power and without NTP,
+  the time is only an estimate, and it is flagged as one.
+- Wi-Fi and BLE share the same 2.4 GHz radio: the scans divide the radio time between
+  them. The web interface stays available during scans.
+- The 160×80 screen cannot display an SVG: the logo is converted off-target into a
+  1 bpp bitmap by `tools/generate_lcd_logo.py`.
+- A weakly received device may be missing from both the journal and WiGLE: absence from
+  the list does not prove absence of a transmitter.
+- Position depends on configuration: with no coordinates entered, observations are
+  timestamped but not located.
 
-## Licence
+## License
 
-**RFSentinel** est sous **[CC BY-NC-SA 4.0](LICENSE)** — attribution, usage non
-commercial, partage à l'identique.
+**RFSentinel** is licensed under **[CC BY-NC-SA 4.0](LICENSE)** — attribution,
+non-commercial, share-alike.
 
-Concrètement : vous pouvez l'utiliser, l'étudier, le modifier et le partager.
-Les versions dérivées et les forks restent sous la même licence, donc libres et
-elles aussi non commerciales. **Toute utilisation commerciale exige un accord
-écrit préalable de l'auteur.**
+In practical terms: you may use it, study it, modify it and share it. Derived versions
+and forks stay under the same licence, so they remain free and non-commercial as well.
+**Any commercial use requires prior written agreement from the author.**
 
-Deux composants tiers gardent leur propre licence et ne sont pas couverts par
-celle-ci : `joltwallet/littlefs` et `esptool-js` 0.7.1, tous deux en Apache-2.0.
-Le texte d'esptool-js est livré à côté de son bundle, dans
-`webtool/vendor/esptool-js/LICENSE`.
+Two third-party components keep their own licence and are not covered by this one:
+`joltwallet/littlefs` and `esptool-js` 0.7.1, both Apache-2.0. The esptool-js licence
+text ships next to its bundle, in `webtool/vendor/esptool-js/LICENSE`.
 
-## Remerciements
+## Acknowledgements
 
-- [LilyGO](https://lilygo.cc/) pour le T-Dongle S3.
-- [esptool-js](https://github.com/espressif/esptool-js) pour le moteur d'écriture
-  du flasher navigateur.
-- [WiGLE.net](https://wigle.net/) pour l'infrastructure de cartographie participative.
-- [joltwallet/littlefs](https://github.com/joltwallet/esp_littlefs) pour le système de fichiers.
-- [OpenStreetMap](https://www.openstreetmap.org/copyright) pour les tuiles de la carte.
-- La base adresse nationale française ([adresse.data.gouv.fr](https://adresse.data.gouv.fr/)) pour le géocodage.
+- [LilyGO](https://lilygo.cc/) for the T-Dongle S3.
+- [esptool-js](https://github.com/espressif/esptool-js) for the write engine behind the
+  browser flasher.
+- [WiGLE.net](https://wigle.net/) for the crowdsourced mapping infrastructure.
+- [joltwallet/littlefs](https://github.com/joltwallet/esp_littlefs) for the filesystem.
+- [OpenStreetMap](https://www.openstreetmap.org/copyright) for the map tiles.
+- The French national address database ([adresse.data.gouv.fr](https://adresse.data.gouv.fr/))
+  for geocoding.
 
 ---
 
-*RFSentinel v1.0.0 — construit avec ESP-IDF 5.3.2.*
+*RFSentinel v1.0.0 — built with ESP-IDF 5.3.2.*
+

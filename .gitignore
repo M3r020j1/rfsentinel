@@ -23,6 +23,9 @@ flash_args.in
 # Le flasher du depot a besoin de ses images : elles sont suivies malgre *.bin
 !webtool/firmware/*.bin
 
+# bin/ porte les images de la version courante pour un flash par esptool
+!bin/*.bin
+
 # --- Sauvegardes locales (contiennent le journal radio reel) -----------
 backups/
 *.bak
