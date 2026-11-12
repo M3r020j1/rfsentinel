@@ -1,0 +1,1809 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RFSentinel</title>
+<style>
+:root {
+  --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3;
+  --muted:#8b949e; --accent:#58a6ff; --ok:#3fb950; --warn:#d29922;
+  --err:#f85149; --hover:#1f2733;
+}
+[data-theme="light"] {
+  --bg:#f6f8fa; --panel:#ffffff; --border:#d0d7de; --text:#1f2328;
+  --muted:#656d76; --accent:#0969da; --ok:#1a7f37; --warn:#9a6700;
+  --err:#cf222e; --hover:#eaeef2;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; font-size:14px; }
+header { display:flex; align-items:center; gap:12px; padding:14px 16px;
+  border-bottom:1px solid var(--border); background:var(--panel); }
+header img { height:52px; width:auto; }
+header .brand { display:flex; flex-direction:column; justify-content:center; line-height:1.1; }
+header .brand .title { font-size:32px; font-weight:700; letter-spacing:.2px; }
+header .brand .version { font-size:13px; font-weight:500; color:var(--muted); margin-top:2px; }
+header .spacer { flex:1; }
+header nav { display:none; align-items:center; gap:8px; }
+header nav .nav-icon { display:inline-flex; align-items:center; justify-content:center;
+  width:38px; height:38px; padding:8px; }
+header nav .nav-icon svg { width:20px; height:20px; }
+header nav .nav-icon[aria-pressed="true"] { color:var(--accent); border-color:var(--accent); }
+#loginView { max-width:470px; margin:12px auto; }
+#loginView input { max-width:240px; }
+#configView .card > h2, #scanView .card > h2, #scanView #excludedTitle, #scanView #presenceTitle, #loginView > h2 { font-size:34px; margin-bottom:16px; }
+@media (max-width:480px) { header { flex-wrap:wrap; } header nav { margin-left:auto; }
+  header .brand .title { font-size:24px; } header img { height:42px; }
+  #configView .card > h2, #scanView .card > h2, #scanView #excludedTitle, #scanView #presenceTitle, #loginView > h2 { font-size:26px; } }
+select,input,button,textarea { background:var(--panel); color:var(--text);
+  border:1px solid var(--border); border-radius:6px; padding:8px 10px;
+  font:inherit; max-width:100%; }
+input,select { width:100%; }
+.password-field { display:flex; align-items:center; gap:6px; min-width:0; }
+.password-field input { min-width:0; flex:1; }
+.password-field button { flex:none; display:inline-flex; align-items:center; justify-content:center; width:38px; height:38px; padding:8px; }
+.password-field svg { width:20px; height:20px; }
+button { cursor:pointer; background:var(--accent); color:#fff; border:none; }
+button.secondary { background:var(--panel); color:var(--text); border:1px solid var(--border); }
+button.danger { background:var(--err); }
+button:hover { filter:brightness(1.1); }
+button:disabled { opacity:.45; cursor:default; filter:none; }
+main { max-width:1400px; margin:0 auto; padding:16px; }
+.card { background:var(--panel); border:1px solid var(--border);
+  border-radius:8px; padding:16px; margin:12px 0; }
+.card h2 { margin:0 0 12px; font-size:15px; color:var(--accent); }
+.row { display:grid; grid-template-columns:180px 1fr; gap:10px;
+  align-items:center; margin:8px 0; }
+.row label { color:var(--muted); }
+.grid2 { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+.grid2 > .card { min-width:0; }
+.config-layout { display:grid; grid-template-columns:minmax(0,2.12fr) minmax(320px,1fr); gap:16px; align-items:start; }
+.config-layout > * { min-width:0; }
+.config-main .row { grid-template-columns:180px minmax(0,1fr); }
+.config-sidebar .row { grid-template-columns:40px minmax(0,1fr); }
+table { width:100%; border-collapse:collapse; font-size:13px; }
+th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); }
+th { color:var(--muted); font-weight:600; }
+th.sortable { cursor:pointer; }
+th.sortable:hover { color:var(--accent); }
+th.sortable.sort-asc, th.sortable.sort-desc { color:var(--text); }
+th.sortable.sort-asc::after { content:" \2191"; }
+th.sortable.sort-desc::after { content:" \2193"; }
+#obsTable { min-width:660px; table-layout:fixed; }
+#obsTable th:nth-child(1) { width:105px; }
+#obsTable th:nth-child(2) { width:165px; }
+#obsTable th:nth-child(4) { width:52px; }
+#obsTable th:nth-child(5) { width:70px; }
+#obsTable th:nth-child(6) { width:62px; }
+#obsTable th:nth-child(7) { width:70px; }
+#obsTable td:nth-child(2) { white-space:nowrap; }
+.mac-copy { display:inline-flex; vertical-align:middle; padding:3px; margin-left:3px; background:transparent; color:var(--muted); border:0; }
+.mac-copy svg { width:15px; height:15px; display:block; }
+#obsTable td:nth-child(3) { overflow-wrap:anywhere; }
+#obsTable th:last-child, #obsTable td:last-child {
+  position:sticky; right:0; background:var(--panel); z-index:1;
+}
+#obsTable tr.clickable:hover td:last-child { background:var(--hover); }
+tr.clickable:hover { background:var(--hover); cursor:pointer; }
+.badge { display:inline-block; padding:2px 8px; border-radius:10px;
+  font-size:12px; background:var(--hover); color:var(--muted); }
+.badge.ok { color:var(--ok); } .badge.warn { color:var(--warn); }
+.badge.err { color:var(--err); }
+.pill { font-size:12px; padding:2px 8px; border-radius:10px;
+  border:1px solid var(--border); color:var(--muted); }
+.pill.wifi { color:var(--accent); } .pill.ble { color:var(--ok); }
+#msg { padding:10px 16px; display:none; border-radius:6px; margin:8px 0; }
+#msg.ok { background:rgba(63,185,80,.15); color:var(--ok); display:block; }
+#msg.err { background:rgba(248,81,73,.15); color:var(--err); display:block; }
+.pager { display:flex; gap:8px; align-items:center; margin-top:8px; }
+#histMapColumn { min-width:0; }
+#map { width:100%; height:400px; border:1px solid var(--border);
+  border-radius:6px; background:var(--bg); }
+ul.plain { list-style:none; margin:0; padding:0; }
+ul.plain li { padding:8px 0; border-bottom:1px solid var(--border); }
+footer { text-align:center; color:var(--muted); font-size:12px; padding:16px; }
+@media (max-width:1399px){ #scanView > .grid2{grid-template-columns:1fr} }
+@media (max-width:1100px){ .config-layout{grid-template-columns:1fr}
+  .config-sidebar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px} }
+@media (max-width:760px){ .grid2{grid-template-columns:1fr}
+  .row,.config-main .row{grid-template-columns:1fr} .row label{margin-bottom:-4px}
+  .config-sidebar{grid-template-columns:1fr;gap:0} }
+button.it { display:inline-flex; align-items:center; gap:8px; }
+button.it svg { width:16px; height:16px; flex:none; }
+.modal { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,.55); padding:16px; z-index:50; }
+.modal.open { display:flex; }
+.modal .box { background:var(--panel); border:1px solid var(--border); border-radius:8px;
+  padding:18px; max-width:460px; width:100%; box-shadow:0 8px 28px rgba(0,0,0,.4); }
+.modal h3 { margin:0 0 8px; font-size:17px; }
+.modal p { margin:0 0 16px; color:var(--muted); line-height:1.45; }
+.modal .actions { display:flex; gap:8px; justify-content:flex-end; }
+</style>
+</head>
+<body>
+<header>
+  <img src="/logo/rfsentinel-icon.svg" alt="RFSentinel">
+  <div class="brand">
+    <div class="title">RFSentinel</div>
+    <div class="version" id="hdrVersion">v1.0.0</div>
+  </div>
+  <div class="spacer"></div>
+  <nav id="appNav" aria-label="Navigation">
+    <button id="scanNav" class="secondary nav-icon" type="button" aria-label="Scan" title="Scan" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12 18.4 5.6"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg></button>
+    <button id="configNav" class="secondary nav-icon" type="button" aria-label="Configuration" title="Configuration" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5 14 3l.6 2.1c.5.2 1 .4 1.5.7l1.9-1.1 2.8 2.8-1.1 1.9c.3.5.5 1 .7 1.5l2.1.6v4l-2.1.6c-.2.5-.4 1-.7 1.5l1.1 1.9-2.8 2.8-1.9-1.1c-.5.3-1 .5-1.5.7l-.6 2.1h-4l-.6-2.1c-.5-.2-1-.4-1.5-.7L6 22.3l-2.8-2.8 1.1-1.9c-.3-.5-.5-1-.7-1.5l-2.1-.6v-4l2.1-.6c.2-.5.4-1 .7-1.5L3.2 7.5 6 4.7l1.9 1.1c.5-.3 1-.5 1.5-.7L10 3z" transform="translate(0 -1) scale(.96) translate(.5 .5)"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button id="wigleUpload" class="secondary nav-icon" type="button" data-i18n-title="upload" aria-label="Upload WiGLE" title="Upload WiGLE"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3c2.6 2.4 4 5.5 4 9s-1.4 6.6-4 9c-2.6-2.4-4-5.5-4-9s1.4-6.6 4-9z"/><path d="M3 12h18"/></svg></button>
+    <button id="logoutNav" class="secondary nav-icon" type="button" data-i18n-title="logout" aria-label="Déconnexion" title="Déconnexion"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 4h3.5A1.5 1.5 0 0 1 20 5.5v13A1.5 1.5 0 0 1 18.5 20H15"/><path d="M10 8 6 12l4 4"/><path d="M6 12h9"/></svg></button>
+  </nav>
+</header>
+<div id="msg"></div>
+<main>
+<div id="wigleStatus" role="status" aria-live="polite" style="display:none; padding:10px; margin:8px 0; border:1px solid var(--border); border-radius:6px"></div>
+
+<section id="loginView" class="card">
+  <h2 data-i18n="login">Connexion</h2>
+  <div class="row"><label data-i18n="user">Utilisateur</label>
+    <input id="loginUser" autocomplete="username"></div>
+  <div class="row"><label data-i18n="pass">Mot de passe</label>
+    <input id="loginPass" type="password" autocomplete="current-password"></div>
+  <button id="loginBtn" data-i18n="loginBtn">Se connecter</button>
+</section>
+
+<section id="appView" style="display:none">
+<div id="scanView">
+
+<div class="grid2">
+  <div class="card">
+    <h2 data-i18n="status">État</h2>
+    <div class="row"><label data-i18n="mode">Mode</label><span id="stMode">—</span></div>
+    <div class="row"><label>IP</label><span id="stIp">—</span></div>
+    <div class="row"><label data-i18n="time">Heure</label><span id="stTime">—</span></div>
+    <div class="row"><label data-i18n="tsq">Horloge</label><span id="stTsq">—</span></div>
+    <div id="timeInfo" style="color:var(--muted);font-size:12px"></div>
+    <button id="timeSyncBtn" class="secondary" data-i18n="syncClock">Régler l’heure depuis cet appareil</button>
+    <div class="row"><label data-i18n="lastSync">Dern. sync</label><span id="stSync">—</span></div>
+    <div class="row"><label data-i18n="scanState">Scan</label><span id="stScan">—</span></div>
+    <div class="row"><label>Wi-Fi</label><span id="stWifi">—</span></div>
+    <div id="wifiScanInfo" style="color:var(--muted);font-size:12px"></div>
+    <div class="row"><label>BLE</label><span id="stBle">—</span></div>
+    <div style="color:var(--muted);font-size:12px" data-i18n="counterNote">Observations présentes dans le journal, toutes pages confondues.</div>
+    <div class="row"><label data-i18n="journal">Journal</label><span id="stStore">—</span></div>
+    <div class="row"><label>MQTT</label><span id="stMqtt">—</span></div>
+    <div style="margin-top:8px;display:flex;gap:8px">
+      <button id="startBtn" data-i18n="start" disabled>Démarrer</button>
+      <button id="stopBtn" class="secondary" data-i18n="stop" disabled>Arrêter</button>
+      <button id="refreshBtn" class="secondary" data-i18n="refresh">Rafraîchir</button>
+    </div>
+    <section aria-labelledby="excludedTitle" style="margin-top:20px">
+      <h2 id="excludedTitle" data-i18n="blSec">Équipements exclus</h2>
+      <div class="row"><label>MAC</label><input id="blMac"></div>
+      <div class="row"><label data-i18n="labelLbl">Label</label><input id="blLabel"></div>
+      <button id="blAdd" data-i18n="blAdd">Ajouter l'exclusion</button>
+      <p style="color:var(--muted);font-size:12px" data-i18n="excludeNote">Les observations déjà enregistrées restent visibles ; les prochaines seront exclues.</p>
+      <ul class="plain" id="blList"></ul>
+    </section>
+    <section aria-labelledby="presenceTitle" style="margin-top:20px">
+      <h2 id="presenceTitle" data-i18n="presenceTitle">Alertes de présence</h2>
+      <div class="row"><label for="presenceMac">MAC</label><input id="presenceMac" placeholder="AA:BB:CC:DD:EE:FF" maxlength="17"></div>
+      <div class="row"><label for="presenceLabel" data-i18n="labelLbl">Label</label><input id="presenceLabel" maxlength="31"></div>
+      <button id="presenceAdd" data-i18n="presenceAdd">Ajouter à la liste</button>
+      <p style="color:var(--muted);font-size:12px" data-i18n="presenceNote">Alerte MQTT à la détection, quel que soit le niveau de signal, puis après une absence.</p>
+      <ul class="plain" id="presenceList"></ul>
+    </section>
+  </div>
+
+  <div class="card">
+    <h2 data-i18n="obs">Observations</h2>
+    <div class="row"><label data-i18n="type">Type</label>
+      <select id="obsType">
+        <option value="" data-i18n="all">Tous</option>
+        <option value="wifi">Wi-Fi</option>
+        <option value="ble">BLE</option>
+      </select></div>
+    <div class="row"><label><span data-i18n="from">Du</span></label><input id="obsFrom" type="datetime-local"></div>
+    <div class="row"><label><span data-i18n="to">Au</span></label><input id="obsTo" type="datetime-local"></div>
+    <div class="row"><span></span><div><button id="obsFilterReset" class="secondary" type="button" data-i18n="filterReset">Effacer le filtre</button></div></div>
+    <div style="overflow-x:auto" tabindex="0" aria-label="Observations">
+      <table id="obsTable">
+        <thead><tr>
+          <th class="sortable" data-sort="date" data-i18n="ts">Date</th><th class="sortable" data-sort="mac">MAC</th><th class="sortable" data-sort="ssid">SSID</th>
+          <th class="sortable" data-sort="rssi">RSSI</th><th class="sortable" data-sort="tsq" data-i18n="tsqH">Horloge</th><th class="sortable" data-sort="type" data-i18n="typeH">Type</th><th data-i18n="actions">Actions</th>
+        </tr></thead>
+        <tbody id="obsBody"></tbody>
+      </table>
+      <div id="obsNote" style="color:var(--muted);font-size:12px"></div>
+    </div>
+    <div class="pager">
+      <button id="prevBtn" class="secondary">◀</button>
+      <span id="pageInfo">—</span>
+      <button id="nextBtn" class="secondary">▶</button>
+    </div>
+  </div>
+</div>
+
+<div class="card" id="histCard">
+  <h2 data-i18n="hist">Historique de l'équipement</h2>
+  <p id="histPrompt" data-i18n="histPrompt" style="color:var(--muted);font-size:13px;margin:0 0 10px">Sélectionnez une observation pour afficher son historique.</p>
+  <p id="histInfo" style="color:var(--muted);font-size:13px;margin:0 0 10px"></p>
+  <div class="grid2">
+    <div style="overflow-x:auto">
+      <table>
+        <thead><tr>
+          <th data-i18n="ts">Date</th><th>MAC</th><th>SSID</th>
+          <th>RSSI</th><th data-i18n="coordsH">Coordonnées</th><th data-i18n="histSource">Source</th>
+        </tr></thead>
+        <tbody id="histBody"></tbody>
+      </table>
+    </div>
+    <div id="histMapColumn">
+      <canvas id="map" width="320" height="300"></canvas>
+      <div id="mapInfo" style="color:var(--muted);font-size:12px;margin-top:4px"></div>
+    </div>
+  </div>
+</div>
+
+
+
+
+
+
+</div>
+
+<div id="configView" style="display:none">
+<div class="config-layout">
+<div class="card config-main">
+  <h2 data-i18n="config">Configuration</h2>
+  <div class="grid2">
+    <div>
+      <h3 data-i18n="secSec">Sécurité et accès WebUI</h3>
+      <div class="row"><label data-i18n="user">Utilisateur</label><input id="cfUser"></div>
+      <div class="row"><label data-i18n="pass">Mot de passe</label><div class="password-field"><input id="cfPass" type="password" autocomplete="new-password"><button id="togglePass" class="pw-toggle secondary" type="button" data-target="cfPass" aria-label="Afficher la valeur saisie" title="Afficher la valeur saisie" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <div class="row"><label for="cfWigleUser">WiGLE API Name</label><div class="password-field"><input id="cfWigleUser" type="password" autocomplete="off"><button id="toggleWigleUser" class="pw-toggle secondary" type="button" data-target="cfWigleUser" aria-label="Afficher la valeur saisie" title="Afficher la valeur saisie" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <div class="row"><label for="cfWigleToken">WiGLE API Token</label><div class="password-field"><input id="cfWigleToken" type="password" autocomplete="off"><button id="toggleWigleToken" class="pw-toggle secondary" type="button" data-target="cfWigleToken" aria-label="Afficher la valeur saisie" title="Afficher la valeur saisie" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <p style="color:var(--muted);font-size:12px" data-i18n="secretHint">L’œil affiche le champ en cours de saisie. Une valeur déjà enregistrée ne peut pas être affichée.</p>
+      <h3 data-i18n="secNet">Connexion réseau</h3>
+      <div class="row"><label>SSID</label><input id="cfSsid"></div>
+      <div class="row"><label data-i18n="wifiPass">Clé Wi-Fi</label><div class="password-field"><input id="cfWifipass" type="password" autocomplete="off"><button id="toggleWifipass" class="pw-toggle secondary" type="button" data-target="cfWifipass" aria-label="Afficher la valeur saisie" title="Afficher la valeur saisie" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <div class="row"><label>AP SSID</label><input id="cfApSsid"></div>
+      <div class="row"><label>AP <span data-i18n="pass">Mot de passe</span></label><div class="password-field"><input id="cfApPass" type="password" autocomplete="off"><button id="toggleApPass" class="pw-toggle secondary" type="button" data-target="cfApPass" aria-label="Afficher la valeur saisie" title="Afficher la valeur saisie" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <h3 data-i18n="secLoc">Localisation</h3>
+      <div class="row"><label for="geoAddress" data-i18n="address">Adresse</label><input id="geoAddress" type="search" autocomplete="street-address"></div>
+      <div class="row"><span></span><button id="geoSearch" type="button" class="secondary" data-i18n="findAddress">Rechercher l’adresse</button></div>
+      <div id="geoResultsRow" class="row" style="display:none"><label for="geoResults" data-i18n="addressResults">Résultats</label><select id="geoResults"></select></div>
+      <div id="geoUseRow" class="row" style="display:none"><span></span><button id="geoUse" type="button" class="secondary" disabled data-i18n="useAddress">Utiliser cette adresse</button></div>
+      <div id="geoStatus" role="status" aria-live="polite" style="color:var(--muted);font-size:12px"></div>
+      <div class="row"><label>Latitude</label><input id="cfLat"></div>
+      <div class="row"><label>Longitude</label><input id="cfLon"></div>
+      <h3 data-i18n="appearance">Apparence</h3>
+      <div class="row"><label for="lang" data-i18n="language">Langue</label>
+        <select id="lang"><option value="fr">Français</option><option value="en">English</option></select></div>
+      <div class="row"><label data-i18n="themeLabel">Thème</label><button id="themeBtn" class="secondary">Mode clair</button></div>
+    </div>
+    <div>
+      <h3 data-i18n="secMon">Surveillance et scans</h3>
+      <div class="row"><label data-i18n="scanAuto">Scan au démarrage</label><input id="cfScanAuto" type="checkbox" style="width:20px"></div>
+      <div class="row"><label data-i18n="minRssi">Seul. enreg. (dBm)</label><input id="cfMinRssi"></div>
+      <div class="row"><label data-i18n="mqRssi">Seul. alerte MQTT (dBm)</label><input id="cfMqRssi"></div>
+      <div class="row"><label data-i18n="rdisc">Rédecouverte (min)</label><input id="cfRdisc"></div>
+      <div class="row"><label>Wi-Fi</label><input id="cfScanWifi" type="checkbox" style="width:20px"></div>
+      <div class="row"><label>BLE</label><input id="cfScanBle" type="checkbox" style="width:20px"></div>
+      <h3>MQTT</h3>
+      <div class="row"><label data-i18n="enable">Activation</label><input id="cfMqEn" type="checkbox" style="width:20px"></div>
+      <div class="row"><label for="cfMqBroker" data-i18n="mqttBroker">Broker (sans protocole)</label><input id="cfMqBroker" placeholder="192.168.1.1" aria-describedby="mqttBrokerHint"></div>
+      <p id="mqttBrokerHint" data-i18n="mqttBrokerHint" style="color:var(--muted);font-size:12px">Adresse IP ou nom d’hôte, sans http:// ni port.</p>
+      <div class="row"><label>Port</label><input id="cfMqPort"></div>
+      <div class="row"><label>User</label><input id="cfMqUser"></div>
+      <div class="row"><label>Pass</label><div class="password-field"><input id="cfMqPass" type="password" autocomplete="off"><button id="toggleMqPass" class="pw-toggle secondary" type="button" data-target="cfMqPass" aria-label="Afficher la valeur saisie" title="Afficher la valeur saisie" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
+      <div class="row"><label>Topic</label><input id="cfMqTopic"></div>
+      <div class="row"><label for="cfPresenceTopic" data-i18n="presenceTopic">Topic présence</label><input id="cfPresenceTopic" maxlength="63"></div>
+      <div class="row"><label for="cfPresenceAbsence" data-i18n="presenceAbsence">Absence avant retour (min)</label><input id="cfPresenceAbsence" type="number" min="0.5" max="1092.25" step="0.5"></div>
+      <div class="row"><label>Client ID</label><input id="cfMqId"></div>
+      <div class="row"><label>TLS</label><input id="cfMqTls" type="checkbox" style="width:20px"></div>
+      <h3 data-i18n="secTime">Date et heure</h3>
+      <div class="row"><label>NTP</label><input id="cfNtp"></div>
+      <div class="row"><label>TZ</label><input id="cfTz"></div>
+      <div class="row"><label>Device ID</label><input id="cfDevId"></div>
+    </div>
+  </div>
+  <div style="margin-top:8px;display:flex;gap:8px">
+    <button id="cfgSave" data-i18n="save">Enregistrer</button>
+  </div>
+</div>
+
+<div class="config-sidebar">
+<div class="card">
+  <h2 data-i18n="exportSec">Export du journal</h2>
+  <p style="color:var(--muted);font-size:12px" data-i18n="exportNote">Fichier CSV au format WiGLE.</p>
+  <div class="row"><label data-i18n="from">Du</label><input id="exFrom" type="date"></div>
+  <div class="row"><label data-i18n="to">Au</label><input id="exTo" type="date"></div>
+  <button id="exportBtn" class="secondary it" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v11"/><path d="M7.5 10 12 14.5 16.5 10"/><path d="M4.5 19h15"/></svg><span id="exportLbl" data-i18n="exportBtn">Télécharger tout le journal</span></button>
+</div>
+<div class="card">
+  <h2 data-i18n="purgeSec">Purge du journal</h2>
+  <div class="row"><label data-i18n="from">Du</label><input id="puFrom" type="date"></div>
+  <div class="row"><label data-i18n="to">Au</label><input id="puTo" type="date"></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+  <button id="purgeBtn" class="danger" data-i18n="purgeBtn">Purger la periode</button>
+  </div>
+  <div id="purgeInfo" style="color:var(--muted);font-size:12px;margin-top:4px"></div>
+</div>
+<div class="card">
+  <h2 data-i18n="calTitle">Calibration BLE</h2>
+  <p style="color:var(--muted);font-size:12px" data-i18n="calNote">Saisissez une adresse BLE observée, démarrez la mesure puis déplacez-vous. Le scan normal reprend à la fin.</p>
+  <button id="findStart" class="secondary" type="button" data-i18n="findStart">Trouver mon appareil</button>
+  <div id="findPanel" style="margin:8px 0;display:none">
+    <p id="findStatus" role="status" aria-live="polite" style="color:var(--muted);font-size:12px"></p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button id="findNext" class="secondary" type="button"></button>
+      <button id="findCancel" class="secondary" type="button" data-i18n="findCancel">Arrêter la recherche</button>
+    </div>
+    <div id="findList" style="margin-top:8px;font-size:12px"></div>
+  </div>
+  <div class="row"><label for="calMac">MAC</label><input id="calMac" placeholder="AA:BB:CC:DD:EE:FF" autocomplete="off" maxlength="17"></div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button id="calZone" class="secondary" type="button" data-i18n="calZone">Calibrer l’enregistrement</button>
+    <button id="calAlert" class="secondary" type="button" data-i18n="calAlert">Calibrer l’alerte MQTT</button>
+    <button id="calStop" class="secondary" type="button" data-i18n="calStop" disabled>Terminer la mesure</button>
+    <button id="calApply" type="button" data-i18n="calApply" disabled>Appliquer le seuil</button>
+  </div>
+  <p id="calStatus" role="status" aria-live="polite" style="color:var(--muted);font-size:12px"></p>
+</div>
+</div>
+
+</div>
+</div>
+
+</section>
+</main>
+<footer>RFSentinel <span id="ftrVersion">v1.0.0</span></footer>
+
+<div id="confirmModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+  <div class="box">
+    <h3 id="confirmTitle" data-i18n="purgeConfirmTitle">Supprimer définitivement ces journaux ?</h3>
+    <p id="confirmBody"></p>
+    <div class="actions">
+      <button id="confirmNo" class="secondary" type="button" data-i18n="no">Non</button>
+      <button id="confirmYes" class="danger" type="button" data-i18n="yes">Oui</button>
+    </div>
+  </div>
+</div>
+
+<div id="wigleModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="wigleConfirmTitle" aria-describedby="wigleConfirmBody">
+  <div class="box">
+    <h3 id="wigleConfirmTitle" data-i18n="wigleConfirmTitle">Envoyer le journal à WiGLE ?</h3>
+    <p id="wigleConfirmBody" data-i18n="wigleConfirmBody">Un fichier CSV regroupant les observations du journal, y compris celles déjà envoyées, sera transmis à WiGLE.</p>
+    <div class="actions">
+      <button id="wigleNo" class="secondary" type="button" data-i18n="no">Non</button>
+      <button id="wigleYes" type="button" data-i18n="yes">Oui</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+function authHdr() {
+  return {};
+}
+const state = { page: 1, pages: 1, logged: false, view: "scan", sort: "", dir: "asc" };
+
+const I18N = {
+  fr: { copyMac:"Copier l’adresse MAC", copiedMac:"Adresse MAC copiée", copyMacFailed:"Impossible de copier l’adresse MAC", mqttBroker:"Broker (sans protocole)", mqttBrokerHint:"Adresse IP ou nom d’hôte, sans http:// ni port.", appearance:"Apparence", language:"Langue", themeLabel:"Thème", actions:"Actions", exclude:"Exclure cet équipement", excluded:"Équipement exclu", excludeAdded:"Équipement ajouté aux exclusions", excludeNote:"Les observations déjà enregistrées restent visibles ; les prochaines seront exclues.", login:"Connexion", user:"Utilisateur", pass:"Mot de passe",
+    loginBtn:"Se connecter", status:"État", mode:"Mode", time:"Heure", tsq:"Horloge",
+    lastSync:"Dern. sync", start:"Démarrer", stop:"Arrêter", refresh:"Rafraîchir",
+    obs:"Observations", type:"Type", all:"Tous", ts:"Date", typeH:"Type",
+    tsqH:"Horloge", journal:"Journal", scanAuto:"Scan au démarrage", scanState:"Scan", syncClock:"Régler l’heure depuis cet appareil", counterNote:"Observations présentes dans le journal, toutes pages confondues.", hist:"Historique de l'équipement", histPrompt:"Sélectionnez une observation pour afficher son historique.", config:"Configuration",
+    secSec:"Sécurité et accès WebUI", secNet:"Connexion réseau", secLoc:"Localisation",
+    address:"Adresse", findAddress:"Rechercher l’adresse", addressResults:"Résultats", useAddress:"Utiliser cette adresse",
+    chooseAddress:"Choisissez une adresse", addressRequired:"Saisissez une adresse à rechercher.", addressSearching:"Recherche en cours…", addressNone:"Aucune adresse trouvée. Précisez la recherche.", addressError:"Recherche impossible. Vérifiez l’accès Internet de cet appareil et réessayez.", addressSelected:"Coordonnées renseignées. Cliquez sur Enregistrer pour les conserver.",
+    secMon:"Surveillance et scans", secTime:"Date et heure", wifiPass:"Clé Wi-Fi",
+    minRssi:"Seuil enregistrement (dBm)", mqRssi:"Seuil alerte MQTT (dBm)",
+    calTitle:"Calibration BLE", calNote:"Saisissez une adresse BLE observée, démarrez la mesure puis déplacez-vous. Le scan normal est suspendu pendant la mesure, puis reprend ; arrêt automatique après 15 minutes.", calZone:"Calibrer l’enregistrement", calAlert:"Calibrer l’alerte MQTT", calStop:"Terminer la mesure", calApply:"Appliquer le seuil", calIdle:"Aucune mesure en cours.", calWaiting:"En attente de signal BLE pour", calActive:"Mesure en cours", calFinished:"Mesure terminée", calMinimum:"Signal le plus faible", calLatest:"Dernier signal", calSamples:"mesures", calAge:"dernière réception il y a", calNoSignal:"Aucune mesure reçue : vérifiez que l’appareil émet en BLE et que son adresse n’a pas changé.", calBadMac:"Saisissez une adresse MAC BLE valide.", calSaved:"Seuil enregistré.", calError:"Calibration indisponible ou interrompue.", calResumeError:"Le scan normal n’a pas pu reprendre : redémarrez-le manuellement.",
+    findStart:"Trouver mon appareil", findCancel:"Arrêter la recherche", findNear1:"Étape 1/3 : placez l’appareil près de la clé et attendez au moins 10 secondes, puis éloignez-vous et cliquez ci-dessous.", findFar:"Étape 2/3 : restez éloigné au moins 10 secondes, puis rapprochez-vous et cliquez ci-dessous.", findNear2:"Étape 3/3 : restez à nouveau près de la clé au moins 10 secondes, puis affichez les résultats.", findNextFar:"Je suis éloigné", findNextNear:"Je suis revenu près de la clé", findFinish:"Afficher les résultats", findResults:"Candidats possibles : sélectionnez-en un, puis lancez une calibration. Le classement ne prouve pas l’identité de l’appareil.", findEmpty:"Aucun candidat reçu aux trois étapes. L’appareil peut ne pas émettre ou avoir changé d’adresse.", findOverflow:"Liste limitée à 48 adresses : des appareils peuvent manquer.", findSelect:"Choisir", findScore:"variation proche/loin", findInsufficient:"mesures incomplètes", findUncertain:"mouvement non confirmé", findSelected:"Adresse sélectionnée. Lancez une calibration.",
+    rdisc:"Rédecouverte (min)", enable:"Activation", save:"Enregistrer",
+    upload:"Upload WiGLE", logout:"Déconnexion", blSec:"Équipements exclus",
+    presenceTitle:"Alertes de présence", presenceAdd:"Ajouter à la liste", presenceNote:"Alerte MQTT à la détection, quel que soit le niveau de signal, puis après une absence.", presenceTopic:"Topic présence", presenceAbsence:"Absence avant retour (min)", presenceInvalid:"Topic ou durée de présence invalide (minimum 0,5 minute, topic différent des alertes).", presenceSavedError:"Impossible d’enregistrer les réglages de présence.",
+    showValue:"Afficher la valeur saisie", hideValue:"Masquer la valeur saisie", wigleConfirmTitle:"Envoyer le journal à WiGLE ?", wigleConfirmBody:"Un fichier CSV regroupant les observations du journal, y compris celles déjà envoyées, sera transmis à WiGLE.", secretHint:"L’œil affiche le champ en cours de saisie. Une valeur déjà enregistrée ne peut pas être affichée.",
+    wigleSending:"Envoi WiGLE en cours", wigleAccepted:"Envoi accepté par WiGLE ; traitement en attente", wigleFailed:"Échec de l’envoi WiGLE", wiglePartial:"Envoi WiGLE partiel", wigleEmpty:"Aucun fichier de journal à envoyer", wigleStatusLost:"Suivi indisponible : l’envoi peut continuer sur la clé.", wigleNoCredentials:"Renseignez l’API Name et l’API Token WiGLE dans Configuration, puis enregistrez.", wigleNoNetwork:"La clé doit être connectée à un réseau avec accès Internet.", wigleBusy:"Un envoi WiGLE est déjà en cours.",
+    blAdd:"Ajouter l'exclusion", labelLbl:"Label",
+    wigleSec:"WiGLE (donnees externes)", purgeSec:"Purge du journal",
+    from:"Du", to:"Au", purgeBtn:"Purger la periode",
+    filterReset:"Effacer le filtre", obsEmpty:"Aucune observation dans cette plage.", obsTruncated:"Liste incomplete : trop d’observations pour ce filtre.",
+    exportSec:"Export du journal", exportBtn:"Télécharger la période",
+    exportNote:"Fichier CSV au format WiGLE. Les dates sélectionnées comprennent chaque journée entière en UTC.",
+    exporting:"Téléchargement en cours…", exportStart:"Le fichier du journal est prêt.", exportFail:"Téléchargement impossible.",
+    purgeConfirmTitle:"Supprimer définitivement ces journaux ?",
+    purgeConfirmBody:"Cette action supprime définitivement toutes les observations enregistrées du {from} au {to}. Rien ne pourra être restauré. Confirmez-vous ?",
+    yes:"Oui", no:"Non",
+    coordsH:"Coordonnees",
+    histSource:"Source", histCombined:"Historique WiGLE et local · 10 résultats récents maximum", histLocalUnavailable:"Historique local indisponible", histPartial:"Liste limitée aux données reçues ; des résultats plus récents peuvent manquer.",
+    histLoading:"Recherche des presences connues de cet equipement…",
+    histFromWigle:"Presences connues sur WiGLE",
+    histFromLocal:"Source : journal local de la cle",
+    histMore:"liste tronquee",
+    histWigleLimit:"recherche limitée : 10 résultats maximum parmi les données reçues de WiGLE, sans pagination",
+    histLocalLimit:"10 résultats locaux maximum",
+    histNoCoords:"Aucune coordonnee pour cet equipement",
+    histAuth:"Identifiants WiGLE refuses (401) : verifiez Configuration.",
+    histMem:"Memoire insuffisante pour la reponse WiGLE.",
+    histBadAnswer:"Reponse WiGLE illisible.",
+    histHttp:"Erreur WiGLE HTTP",
+    histFail:"Recherche WiGLE impossible.",    noWigle:"Aucune donnee WiGLE pour cet equipement",
+    histEmpty:"WiGLE a repondu sans donnees.",
+    histBadMac:"Adresse materielle refusee par WiGLE.",
+    histNoLocal:"Aucune trace de cet equipement dans le journal local.",
+    badDates:"Dates invalides",
+    okSaved:"Configuration enregistree", okUpload:"Upload termine",
+    loginErr:"Identifiants invalides", netErr:"Erreur reseau" },
+  en: { copyMac:"Copy MAC address", copiedMac:"MAC address copied", copyMacFailed:"Could not copy MAC address", mqttBroker:"Broker (no protocol)", mqttBrokerHint:"IP address or host name, without http:// or a port.", appearance:"Appearance", language:"Language", themeLabel:"Theme", actions:"Actions", exclude:"Exclude this device", excluded:"Device excluded", excludeAdded:"Device added to exclusions", excludeNote:"Existing observations remain visible; future observations will be excluded.", login:"Login", user:"Username", pass:"Password",
+    loginBtn:"Sign in", status:"Status", mode:"Mode", time:"Time", tsq:"Clock",
+    lastSync:"Last sync", start:"Start", stop:"Stop", refresh:"Refresh",
+    obs:"Observations", type:"Type", all:"All", ts:"Date", typeH:"Type",
+    tsqH:"Clock", journal:"Log", scanAuto:"Scan at startup", scanState:"Scanning", syncClock:"Set time from this device", counterNote:"Observations currently in the log, across all pages.", hist:"Device history", histPrompt:"Select an observation to view its history.", config:"Settings",
+    secSec:"WebUI security", secNet:"Network", secLoc:"Location",
+    address:"Address", findAddress:"Search for address", addressResults:"Results", useAddress:"Use this address",
+    chooseAddress:"Choose an address", addressRequired:"Enter an address to search.", addressSearching:"Searching…", addressNone:"No address found. Refine your search.", addressError:"Search unavailable. Check this device’s Internet connection and try again.", addressSelected:"Coordinates filled in. Click Save to keep them.",
+    secMon:"Monitoring and scans", secTime:"Date and time", wifiPass:"Wi-Fi key",
+    minRssi:"Log threshold (dBm)", mqRssi:"MQTT alert threshold (dBm)",
+    calTitle:"BLE calibration", calNote:"Enter an observed BLE address, start measuring, then move around. Normal scanning pauses during measurement and resumes afterwards; measurement stops automatically after 15 minutes.", calZone:"Calibrate logging", calAlert:"Calibrate MQTT alert", calStop:"Finish measurement", calApply:"Apply threshold", calIdle:"No measurement in progress.", calWaiting:"Waiting for BLE signal from", calActive:"Measuring", calFinished:"Measurement finished", calMinimum:"Weakest signal", calLatest:"Latest signal", calSamples:"samples", calAge:"last received", calNoSignal:"No samples received: check that the device advertises over BLE and its address has not changed.", calBadMac:"Enter a valid BLE MAC address.", calSaved:"Threshold saved.", calError:"Calibration unavailable or interrupted.", calResumeError:"Normal scanning could not resume; start it manually.",
+    findStart:"Find my device", findCancel:"Stop searching", findNear1:"Step 1/3: place the device near the receiver for at least 10 seconds, then move away and click below.", findFar:"Step 2/3: stay away for at least 10 seconds, then return near the receiver and click below.", findNear2:"Step 3/3: stay near the receiver again for at least 10 seconds, then show the results.", findNextFar:"I am away", findNextNear:"I am back nearby", findFinish:"Show results", findResults:"Possible candidates: select one, then start calibration. Ranking does not prove device identity.", findEmpty:"No candidate was received in all three steps. The device may not advertise or its address may have changed.", findOverflow:"Limited to 48 addresses: some devices may be missing.", findSelect:"Select", findScore:"near/far change", findInsufficient:"incomplete samples", findUncertain:"movement not confirmed", findSelected:"Address selected. Start a calibration.",
+    rdisc:"Rediscovery (min)", enable:"Enable", save:"Save",
+    upload:"Upload to WiGLE", logout:"Sign out", blSec:"Excluded devices",
+    presenceTitle:"Presence alerts", presenceAdd:"Add to list", presenceNote:"MQTT alert on detection at any signal level, then after an absence.", presenceTopic:"Presence topic", presenceAbsence:"Absence before return (min)", presenceInvalid:"Invalid presence topic or duration (at least 0.5 minute; use a different topic).", presenceSavedError:"Could not save presence settings.",
+    secretHint:"The eye shows the field being entered. A value already saved cannot be displayed.", wigleConfirmTitle:"Send the log to WiGLE?", wigleConfirmBody:"One CSV containing journal observations, including those already sent, will be sent to WiGLE.", showValue:"Show the entered value", hideValue:"Hide the entered value",
+    wigleSending:"Uploading to WiGLE", wigleAccepted:"Accepted by WiGLE; processing pending", wigleFailed:"WiGLE upload failed", wiglePartial:"WiGLE upload partially complete", wigleEmpty:"No journal files to upload", wigleStatusLost:"Status unavailable: the upload may still be running on the device.", wigleNoCredentials:"Enter the WiGLE API Name and API Token in Settings and save.", wigleNoNetwork:"The device must be connected to a network with Internet access.", wigleBusy:"A WiGLE upload is already running.",
+    blAdd:"Add exclusion", labelLbl:"Label",
+    wigleSec:"WiGLE (external data)", purgeSec:"Log purge",
+    from:"From", to:"To", purgeBtn:"Purge range",
+    filterReset:"Clear filter", obsEmpty:"No observation in this range.", obsTruncated:"Incomplete list: too many observations for this filter.",
+    exportSec:"Export journal", exportBtn:"Download period",
+    exportNote:"WiGLE CSV file. The selected dates include each full day in UTC.",
+    exporting:"Downloading…", exportStart:"The log file is ready.", exportFail:"Download failed.",
+    purgeConfirmTitle:"Delete these logs permanently?",
+    purgeConfirmBody:"This permanently removes every observation recorded from {from} to {to}. Nothing can be restored. Do you confirm?",
+    yes:"Yes", no:"No",
+    coordsH:"Coordinates",
+    histSource:"Source", histCombined:"WiGLE and local history · up to 10 recent results", histLocalUnavailable:"Local history unavailable", histPartial:"Limited to received data; more recent results may be missing.",
+    histLoading:"Looking up known sightings for this device…",
+    histFromWigle:"Known sightings on WiGLE",
+    histFromLocal:"Source: local device log",
+    histMore:"list truncated",
+    histWigleLimit:"limited lookup: at most 10 results from the WiGLE data received, without pagination",
+    histLocalLimit:"at most 10 local results",
+    histNoCoords:"No coordinates for this device",
+    histAuth:"WiGLE credentials rejected (401): check Settings.",
+    histMem:"Not enough memory for the WiGLE answer.",
+    histBadAnswer:"Unreadable WiGLE answer.",
+    histHttp:"WiGLE HTTP error",
+    histFail:"WiGLE lookup failed.",    noWigle:"No WiGLE data for this device",
+    histEmpty:"WiGLE answered without data.",
+    histBadMac:"MAC address rejected by WiGLE.",
+    histNoLocal:"No trace of this device in the local journal.",
+    badDates:"Invalid dates",
+    okSaved:"Settings saved", okUpload:"Upload complete",
+    loginErr:"Invalid credentials", netErr:"Network error" }
+};
+const CONFIG_HELP = {
+  fr: {
+    cfUser:"Identifiant de connexion à l’interface. Par défaut : admin.", cfPass:"Mot de passe de l’interface ; laisser vide pour le conserver.",
+    cfWigleUser:"API Name WiGLE pour les recherches et les exports ; laisser vide pour le conserver.", cfWigleToken:"API Token WiGLE ; laisser vide pour le conserver.",
+    cfSsid:"Nom du réseau Wi-Fi auquel connecter la clé.", cfWifipass:"Clé du réseau Wi-Fi ; laisser vide pour la conserver.", cfApSsid:"Nom du point d’accès de secours. Par défaut : RFSentinel-Setup.", cfApPass:"Mot de passe du point d’accès ; laisser vide pour le conserver.",
+    geoAddress:"Adresse à rechercher pour renseigner la position de la clé.", geoResults:"Sélectionner une adresse parmi les résultats.", cfLat:"Latitude de la clé, en degrés décimaux. Par défaut : 0.", cfLon:"Longitude de la clé, en degrés décimaux. Par défaut : 0.", lang:"Langue de l’interface. Par défaut : français.", themeBtn:"Changer le thème de l’interface.",
+    cfScanAuto:"Démarrer les scans automatiquement. Par défaut : activé.", cfMinRssi:"Signal minimum pour enregistrer une observation. Par défaut : -95 dBm.", cfMqRssi:"Signal minimum pour les alertes MQTT ordinaires. Par défaut : -60 dBm ; les alertes de présence ont leur propre règle.", cfRdisc:"Délai minimum entre deux enregistrements d’une même adresse. Par défaut : 60 minutes ; 0 désactive ce délai.", cfScanWifi:"Activer les scans Wi-Fi. Par défaut : activé.", cfScanBle:"Activer les scans BLE. Par défaut : activé.",
+    cfMqEn:"Activer la connexion au broker MQTT. Par défaut : désactivé.", cfMqBroker:"Adresse IP ou nom du broker MQTT, sans protocole ni port.", cfMqPort:"Port du broker MQTT. Par défaut : 1883 ; adapter au broker, notamment avec TLS.", cfMqUser:"Identifiant MQTT si le broker en demande un.", cfMqPass:"Mot de passe MQTT ; laisser vide pour le conserver.", cfMqTopic:"Topic des alertes ordinaires. Par défaut : /rfsentinel/alert.", cfPresenceTopic:"Topic des alertes de présence, distinct du topic des alertes ordinaires. Par défaut : /rfsentinel/presence.", cfPresenceAbsence:"Durée sans détection avant qu’un retour produise une nouvelle alerte. Par défaut : 2 minutes ; minimum : 0,5 minute.", cfMqId:"Identifiant du client MQTT. Par défaut : rfsentinel.", cfMqTls:"Utiliser TLS pour la connexion MQTT. Par défaut : désactivé.",
+    cfNtp:"Serveur de synchronisation de l’horloge. Par défaut : pool.ntp.org.", cfTz:"Fuseau horaire au format POSIX. Par défaut : CET-1CEST,M3.5.0,M10.5.0/3.", cfDevId:"Identifiant de cette clé dans les messages MQTT. Par défaut : rfsentinel-01.",
+    exFrom:"Premier jour UTC inclus dans l’export.", exTo:"Dernier jour UTC inclus dans l’export.", puFrom:"Premier jour inclus dans la purge, selon le fuseau de cet appareil.", puTo:"Dernier jour inclus dans la purge, selon le fuseau de cet appareil.", calMac:"Adresse BLE à mesurer pour la calibration."
+  },
+  en: {
+    cfUser:"Web interface login. Default: admin.", cfPass:"Web interface password; leave blank to keep it.", cfWigleUser:"WiGLE API Name for searches and uploads; leave blank to keep it.", cfWigleToken:"WiGLE API Token; leave blank to keep it.",
+    cfSsid:"Name of the Wi-Fi network used by the device.", cfWifipass:"Wi-Fi network password; leave blank to keep it.", cfApSsid:"Fallback access point name. Default: RFSentinel-Setup.", cfApPass:"Access point password; leave blank to keep it.", geoAddress:"Address to search for the device location.", geoResults:"Select an address from the results.", cfLat:"Device latitude in decimal degrees. Default: 0.", cfLon:"Device longitude in decimal degrees. Default: 0.", lang:"Interface language. Default: French.", themeBtn:"Change the interface theme.",
+    cfScanAuto:"Start scanning automatically. Default: enabled.", cfMinRssi:"Minimum signal for recording an observation. Default: -95 dBm.", cfMqRssi:"Minimum signal for ordinary MQTT alerts. Default: -60 dBm; presence alerts use their own rule.", cfRdisc:"Minimum delay between records for the same address. Default: 60 minutes; 0 disables the delay.", cfScanWifi:"Enable Wi-Fi scans. Default: enabled.", cfScanBle:"Enable BLE scans. Default: enabled.",
+    cfMqEn:"Enable the MQTT broker connection. Default: disabled.", cfMqBroker:"Broker IP address or host name, without protocol or port.", cfMqPort:"MQTT broker port. Default: 1883; adjust to your broker, especially with TLS.", cfMqUser:"MQTT user name if required by the broker.", cfMqPass:"MQTT password; leave blank to keep it.", cfMqTopic:"Ordinary alert topic. Default: /rfsentinel/alert.", cfPresenceTopic:"Presence alert topic, distinct from the ordinary alert topic. Default: /rfsentinel/presence.", cfPresenceAbsence:"Time without detection before a return triggers a new alert. Default: 2 minutes; minimum: 0.5 minute.", cfMqId:"MQTT client identifier. Default: rfsentinel.", cfMqTls:"Use TLS for MQTT. Default: disabled.", cfNtp:"Clock synchronization server. Default: pool.ntp.org.", cfTz:"Time zone in POSIX format. Default: CET-1CEST,M3.5.0,M10.5.0/3.", cfDevId:"Device identifier in MQTT messages. Default: rfsentinel-01.",
+    exFrom:"First UTC day included in the export.", exTo:"Last UTC day included in the export.", puFrom:"First day included in the purge, in this device’s time zone.", puTo:"Last day included in the purge, in this device’s time zone.", calMac:"BLE address to measure for calibration."
+  }
+};
+function updateConfigHelp() {
+  for (const [id, hint] of Object.entries(CONFIG_HELP[lang])) {
+    const el = $(id); if (el) el.title = hint;
+  }
+}
+let lang = "fr";
+let secretFlags = {};
+function t(k) { return (I18N[lang] && I18N[lang][k]) || k; }
+function updateSecretHints() {
+  for (const [id, set] of Object.entries(secretFlags)) $(id).placeholder = set ? "\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022" : "";
+  document.querySelectorAll("#configView input[type=password]").forEach((el) => {
+    const hint = CONFIG_HELP[lang][el.id] || "";
+    el.title = hint + (secretFlags[el.id] ? (lang === "fr" ? " Valeur enregistrée : laisser vide pour conserver." : " Saved value: leave blank to keep.") : "");
+  });
+}
+function updateSecretsVisibility() {
+  document.querySelectorAll("#configView .pw-toggle").forEach((btn) => {
+    const input = $(btn.dataset.target);
+    const visible = !!input && input.type === "text";
+    const label = visible ? t("hideValue") : t("showValue");
+    btn.setAttribute("aria-label", label);
+    btn.setAttribute("aria-pressed", visible ? "true" : "false");
+    btn.title = label;
+  });
+}
+function bindSecretToggles() {
+  document.querySelectorAll("#configView .pw-toggle").forEach((btn) => {
+    btn.onclick = () => {
+      const input = $(btn.dataset.target);
+      if (!input) return;
+      input.type = input.type === "password" ? "text" : "password";
+      updateSecretsVisibility();
+    };
+  });
+}
+function applyI18n() {
+  document.querySelectorAll("[data-i18n]").forEach((el) => {
+    const k = el.getAttribute("data-i18n");
+    el.textContent = t(k);
+  });
+  updateThemeButton();
+  updateExcludeButtons();
+  updateConfigHelp();
+  updateSecretHints();
+  updateSecretsVisibility();
+  $("scanNav").title = lang === "fr" ? "Scan" : "Scan";
+  $("scanNav").setAttribute("aria-label", $("scanNav").title);
+  $("configNav").title = t("config");
+  $("configNav").setAttribute("aria-label", $("configNav").title);
+  document.querySelectorAll("[data-i18n-title]").forEach((el) => {
+    const k = el.getAttribute("data-i18n-title");
+    el.setAttribute("title", t(k));
+    el.setAttribute("aria-label", t(k));
+  });
+  $("appNav").setAttribute("aria-label", lang === "fr" ? "Navigation" : "Navigation");
+}
+
+function updateThemeButton() {
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  $("themeBtn").textContent = dark ? (lang === "fr" ? "Mode clair" : "Light mode") : (lang === "fr" ? "Mode sombre" : "Dark mode");
+}
+
+function qualityLabel(value) {
+  if (value === "NTP_SYNCED") return lang === "fr" ? "NTP" : "NTP";
+  if (value === "ESTIMATED") return lang === "fr" ? "Estimée" : "Estimated";
+  return lang === "fr" ? "Inconnue" : "Unknown";
+}
+
+function qualityExplanation(value) {
+  if (value === "NTP_SYNCED") return lang === "fr" ? "Heure synchronisée avec un serveur NTP." : "Time synchronized with an NTP server.";
+  if (value === "ESTIMATED") return lang === "fr" ? "Heure estimée lors de l’enregistrement à partir de l’appareil connecté ou d’une référence sauvegardée." : "Time was estimated when recorded from the connected device or a saved reference.";
+  return lang === "fr" ? "La qualité de l’heure n’était pas connue lors de l’enregistrement." : "Clock quality was unknown when this observation was recorded.";
+}
+
+let excludedMacs = new Set();
+function updateExcludeButtons() {
+  document.querySelectorAll("[data-exclude-mac]").forEach((button) => {
+    const excluded = excludedMacs.has(button.dataset.excludeMac);
+    button.disabled = excluded;
+    button.textContent = excluded ? "✓" : "+";
+    button.title = excluded ? t("excluded") : t("exclude");
+    button.setAttribute("aria-label", button.title + " " + button.dataset.excludeMac);
+  });
+}
+
+function msg(text, ok) {
+  const m = $("msg");
+  m.textContent = text;
+  m.className = ok ? "ok" : "err";
+  setTimeout(() => { m.className = ""; m.textContent = ""; }, 5000);
+}
+
+async function fetchWithTimeout(path, options, timeoutMs = 12000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try { return await fetch(path, { ...options, signal: controller.signal }); }
+  finally { clearTimeout(timer); }
+}
+
+let geoMatches = [];
+let geoRequest = 0;
+function clearGeoResults() {
+  geoMatches = [];
+  $("geoResults").innerHTML = "";
+  $("geoResultsRow").style.display = "none";
+  $("geoUseRow").style.display = "none";
+  $("geoUse").disabled = true;
+}
+
+async function searchAddress() {
+  const request = ++geoRequest;
+  const address = $("geoAddress").value.trim();
+  clearGeoResults();
+  if (!address) { $("geoStatus").textContent = t("addressRequired"); return; }
+  $("geoSearch").disabled = true;
+  $("geoStatus").textContent = t("addressSearching");
+  try {
+    const url = "https://data.geopf.fr/geocodage/search?q=" + encodeURIComponent(address) + "&limit=5";
+    const response = await fetchWithTimeout(url, { credentials: "omit", referrerPolicy: "no-referrer" });
+    if (!response.ok) throw new Error("geocoding_http");
+    const data = await response.json();
+    if (request !== geoRequest) return;
+    geoMatches = (Array.isArray(data.features) ? data.features : []).filter((feature) => {
+      const c = feature && feature.geometry && feature.geometry.coordinates;
+      return feature && feature.geometry && feature.geometry.type === "Point" && Array.isArray(c) &&
+        typeof c[0] === "number" && Number.isFinite(c[0]) && c[0] >= -180 && c[0] <= 180 &&
+        typeof c[1] === "number" && Number.isFinite(c[1]) && c[1] >= -90 && c[1] <= 90 &&
+        feature.properties && typeof feature.properties.label === "string" && feature.properties.label.trim();
+    }).slice(0, 5);
+    if (!geoMatches.length) { $("geoStatus").textContent = t("addressNone"); return; }
+    const placeholder = document.createElement("option");
+    placeholder.value = ""; placeholder.textContent = t("chooseAddress");
+    $("geoResults").appendChild(placeholder);
+    geoMatches.forEach((feature, index) => {
+      const option = document.createElement("option");
+      option.value = String(index); option.textContent = feature.properties.label;
+      $("geoResults").appendChild(option);
+    });
+    $("geoResults").value = "";
+    $("geoResultsRow").style.display = "grid";
+    $("geoUseRow").style.display = "grid";
+    $("geoStatus").textContent = "";
+  } catch (e) {
+    if (request === geoRequest) $("geoStatus").textContent = t("addressError");
+  } finally {
+    if (request === geoRequest) $("geoSearch").disabled = false;
+  }
+}
+
+function useAddress() {
+  const selected = $("geoResults").value;
+  if (selected === "" || !/^\d+$/.test(selected) || !geoMatches[Number(selected)]) return;
+  const coordinates = geoMatches[Number(selected)].geometry.coordinates;
+  $("cfLat").value = String(coordinates[1]);
+  $("cfLon").value = String(coordinates[0]);
+  $("geoStatus").textContent = t("addressSelected");
+}
+
+async function post(path, body) {
+  const opt = { method: "POST", credentials: "same-origin",
+                headers: Object.assign({ "Content-Type": "application/json" }, authHdr()) };
+  if (body) opt.body = JSON.stringify(body);
+  const r = await fetchWithTimeout(path, opt);
+  const j = await r.json().catch(() => ({}));
+  if (j && j.error === "unauthorized") { setLoggedIn(false); throw new Error("unauthorized"); }
+  if (!r.ok || (j && j.ok === false)) throw new Error((j && j.error) || ("http_" + r.status));
+  return j;
+}
+
+async function get(path) {
+  let lastErr = null;
+  /* WiGLE peut mettre plusieurs secondes a repondre : une seule tentative,
+     mais un delai assez long pour ne pas abandonner pendant la recherche. */
+  const isWigle = path.startsWith("/api/wigle");
+  const tries = isWigle ? 1 : 3;
+  const tmo = path.startsWith("/api/observations") ? 60000 : (isWigle ? 70000 : 12000);
+  for (let i = 0; i < tries; i++) {
+    try {
+      const r = await fetchWithTimeout(path, { credentials: "same-origin", cache: "no-store", headers: authHdr() }, tmo);
+      const j = await r.json().catch(() => ({}));
+      if (j && j.error === "unauthorized") { setLoggedIn(false); throw new Error("unauthorized"); }
+      if (!r.ok || (j && j.ok === false)) throw new Error((j && j.error) || ("http_" + r.status));
+      return j;
+    } catch (e) {
+      lastErr = e;
+      if (e.message === "unauthorized") throw e;
+      await new Promise((res) => setTimeout(res, 1500));
+    }
+  }
+  throw new Error("reseau: " + (lastErr ? lastErr.message : "echec"));
+}
+
+function setView(view) {
+  state.view = view === "config" ? "config" : "scan";
+  $("scanView").style.display = state.view === "scan" ? "block" : "none";
+  $("configView").style.display = state.view === "config" ? "block" : "none";
+  $("scanNav").setAttribute("aria-pressed", state.view === "scan" ? "true" : "false");
+  $("configNav").setAttribute("aria-pressed", state.view === "config" ? "true" : "false");
+}
+
+function setLoggedIn(v) {
+  state.logged = v;
+  $("appNav").style.display = v ? "flex" : "none";
+  if (!v) state.view = "scan";
+  setView(state.view);
+  $("loginView").style.display = v ? "none" : "block";
+  $("appView").style.display = v ? "block" : "none";
+}
+
+async function doLogin() {
+  const u = $("loginUser").value.trim();
+  const p = $("loginPass").value;
+  try {
+    const j = await post("/api/login", { user: u, pass: p });
+    if (j.ok) {
+      presenceSettingsLoaded = false;
+      setLoggedIn(true);
+      $("loginPass").value = "";
+      await refresh();
+      if (j.must_change) {
+        msg(lang === "fr"
+          ? "Pensez à changer le mot de passe par défaut dans la configuration."
+          : "Please change the default password in settings.", true);
+      }
+      await loadConfig();
+      await loadObservations();
+      await loadBlacklist();
+      await loadPresence(true);
+      await refresh();
+    } else {
+      msg(t("loginErr"), false);
+    }
+  } catch (e) { msg(e.message === "bad_credentials" ? t("loginErr")
+                                                     : t("netErr") + ": " + e.message, false); }
+}
+
+async function doLogout() {
+  try { await post("/api/logout", null); } catch (e) {}
+  presenceSettingsLoaded = false;
+  setLoggedIn(false);
+}
+
+let loadedWifiSsid = "";
+async function loadConfig() {
+  try {
+    const j = await get("/api/config");
+    if (!j || j.ok === false) return;
+    if (typeof j.ui_lang === "number") {
+      lang = j.ui_lang === 1 ? "en" : "fr";
+      $("lang").value = lang;
+      applyI18n();
+    }
+    $("cfUser").value = j.web_user || "";
+    $("cfSsid").value = j.wifi_ssid || "";
+    loadedWifiSsid = j.wifi_ssid || "";
+    $("cfApSsid").value = j.ap_ssid || "";
+    $("cfLat").value = j.lat;
+    $("cfLon").value = j.lon;
+    $("cfMinRssi").value = j.min_rssi;
+    $("cfMqRssi").value = j.mqtt_min_rssi;
+    $("cfRdisc").value = j.rediscover_min;
+    $("cfScanWifi").checked = !!j.scan_wifi;
+    $("cfScanBle").checked = !!j.scan_ble;
+    $("cfScanAuto").checked = !!j.scan_autostart;
+    $("cfMqEn").checked = !!j.mqtt_enabled;
+    $("cfMqBroker").value = j.mqtt_broker || "";
+    $("cfMqPort").value = j.mqtt_port;
+    $("cfMqUser").value = j.mqtt_user || "";
+    $("cfMqTopic").value = j.mqtt_topic || "";
+    $("cfMqId").value = j.mqtt_client_id || "";
+    $("cfMqTls").checked = !!j.mqtt_tls;
+    $("cfNtp").value = j.ntp_server || "";
+    $("cfTz").value = j.tz || "";
+    $("cfDevId").value = j.device_id || "";
+    secretFlags = { cfPass: !!j.web_pass_set, cfWifipass: !!j.wifi_pass_set, cfWigleUser: !!j.wigle_user_set,
+      cfApPass: !!j.ap_pass_set, cfMqPass: !!j.mqtt_pass_set,
+      cfWigleToken: !!j.wigle_token_set };
+    updateSecretHints();
+  } catch (e) { msg(t("netErr") + ": " + e.message, false); }
+}
+
+let presenceSettingsLoaded = false;
+async function saveConfig() {
+  if (!presenceSettingsLoaded) {
+    msg(lang === "fr" ? "Les réglages de présence ne sont pas chargés. Reconnectez-vous avant d’enregistrer." : "Presence settings have not loaded. Reconnect before saving.", false);
+    return;
+  }
+  const wifiChanged = $("cfSsid").value.trim() !== loadedWifiSsid || $("cfWifipass").value !== "";
+  const body = {
+    wifi_ssid: $("cfSsid").value.trim(),
+    wifi_pass: $("cfWifipass").value,
+    web_user: $("cfUser").value.trim(),
+    web_pass: $("cfPass").value,
+    wigle_user: $("cfWigleUser").value.trim(),
+    wigle_token: $("cfWigleToken").value,
+    ap_ssid: $("cfApSsid").value.trim(),
+    ap_pass: $("cfApPass").value,
+    lat: parseFloat($("cfLat").value) || 0,
+    lon: parseFloat($("cfLon").value) || 0,
+    min_rssi: parseInt($("cfMinRssi").value, 10),
+    mqtt_min_rssi: parseInt($("cfMqRssi").value, 10),
+    rediscover_min: parseInt($("cfRdisc").value, 10),
+    scan_wifi: $("cfScanWifi").checked ? 1 : 0,
+    scan_ble: $("cfScanBle").checked ? 1 : 0,
+    scan_autostart: $("cfScanAuto").checked ? 1 : 0,
+    ui_lang: lang === "fr" ? 0 : 1,
+    mqtt_enabled: $("cfMqEn").checked ? 1 : 0,
+    mqtt_broker: $("cfMqBroker").value.trim(),
+    mqtt_port: parseInt($("cfMqPort").value, 10),
+    mqtt_user: $("cfMqUser").value.trim(),
+    mqtt_pass: $("cfMqPass").value,
+    mqtt_topic: $("cfMqTopic").value.trim(),
+    mqtt_client_id: $("cfMqId").value.trim(),
+    mqtt_tls: $("cfMqTls").checked ? 1 : 0,
+    ntp_server: $("cfNtp").value.trim(),
+    tz: $("cfTz").value.trim(),
+    device_id: $("cfDevId").value.trim()
+  };
+  if (presenceSettingsLoaded) {
+    body.presence_topic = $("cfPresenceTopic").value.trim();
+    body.presence_absence_s = Math.round(Number($("cfPresenceAbsence").value) * 60);
+  }
+  try {
+    const j = await post("/api/config", body);
+    msg(j.ap_changed
+      ? (lang === "fr" ? "Configuration enregistrée. Reconnectez-vous au point d’accès avec les nouveaux paramètres." : "Settings saved. Reconnect to the access point using the new settings.")
+      : (wifiChanged ? (lang === "fr" ? "Configuration enregistrée. Redémarrez la clé pour rejoindre le réseau Wi-Fi et utiliser NTP." : "Settings saved. Restart the device to join Wi-Fi and use NTP.") : (j.ok ? t("okSaved") : (j.error || "error"))), !!j.ok);
+  } catch (e) {
+    if (e.message === "wigle_credentials_too_long")
+      msg(lang === "fr" ? "API Name ou API Token WiGLE trop long : 128 octets maximum par champ." : "WiGLE API Name or API Token is too long: maximum 128 bytes per field.", false);
+    else if (e.message === "bad_web_credentials")
+      msg(lang === "fr" ? "Mot de passe WebUI invalide : laissez le champ vide pour le conserver, ou saisissez au moins 8 caractères." : "Invalid WebUI password: leave it blank to keep it, or enter at least 8 characters.", false);
+    else if (e.message === "mqtt_invalid")
+      msg(lang === "fr" ? "Configuration MQTT invalide : vérifiez le port et la longueur des champs." : "Invalid MQTT settings: check the port and field lengths.", false);
+    else if (e.message === "mqtt_save_failed")
+      msg(lang === "fr" ? "Impossible d’enregistrer la configuration MQTT." : "Could not save the MQTT settings.", false);
+    else if (e.message === "presence_invalid") msg(t("presenceInvalid"), false);
+    else if (e.message === "presence_save_failed") msg(t("presenceSavedError"), false);
+    else if (e.message === "wigle_credentials_save_failed")
+      msg(lang === "fr" ? "Impossible d’enregistrer les identifiants WiGLE." : "Could not save the WiGLE credentials.", false);
+    else msg(t("netErr") + ": " + e.message, false);
+  }
+}
+
+let monitoringUpload = false;
+let uploadingToWigle = false;
+function showWigleStatus(text, failed) {
+  const status = $("wigleStatus");
+  status.style.display = "block";
+  status.style.color = failed ? "var(--err)" : "var(--text)";
+  status.textContent = text;
+}
+function closeWigleConfirm() { $("wigleModal").classList.remove("open"); }
+function openWigleConfirm() {
+  $("wigleModal").classList.add("open");
+  $("wigleNo").focus();
+}
+async function monitorWigleUpload() {
+  if (monitoringUpload) return;
+  monitoringUpload = true;
+  try {
+    while (state.logged) {
+      const j = await get("/api/wigle/upload/status");
+      if (!j.started) return;
+      const counts = lang === "fr" ? `Fichiers acceptés : ${j.uploaded} · Échecs : ${j.failed}`
+                                    : `Files accepted: ${j.uploaded} · Failed: ${j.failed}`;
+      $("wigleUpload").disabled = !!j.running;
+      if (j.running) {
+        showWigleStatus(t("wigleSending") + " — " + counts + (j.last_error ? " · " + j.last_error : ""), !!j.failed);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+        continue;
+      }
+      const title = j.failed ? (j.uploaded ? t("wiglePartial") : t("wigleFailed"))
+                             : (j.uploaded ? t("wigleAccepted") : t("wigleEmpty"));
+      showWigleStatus(title + " — " + counts + (j.last_error ? " · " + j.last_error : ""), !!j.failed);
+      return;
+    }
+  } catch (e) {
+    if (state.logged) showWigleStatus(t("wigleStatusLost"), true);
+    $("wigleUpload").disabled = false;
+  } finally { monitoringUpload = false; }
+}
+async function wigleUpload() {
+  closeWigleConfirm();
+  $("wigleUpload").disabled = true;
+  uploadingToWigle = true;
+  showWigleStatus(t("wigleSending"), false);
+  try {
+    /* Let an in-flight observations request release its temporary buffer
+       before allocating memory for the TLS handshake. Scanning continues. */
+    for (let i = 0; observationsRefreshing && i < 50; i++)
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    if (observationsRefreshing) throw new Error(lang === "fr" ? "Chargement des observations en cours, réessayez." : "Observations are still loading, please retry.");
+    await post("/api/wigle/upload", null);
+    await monitorWigleUpload();
+  } catch (e) {
+    if (e.message === "upload_running") { await monitorWigleUpload(); return; }
+    const known = { no_credentials: "wigleNoCredentials", no_network: "wigleNoNetwork", upload_running: "wigleBusy" };
+    showWigleStatus(known[e.message] ? t(known[e.message]) : t("wigleFailed") + ": " + e.message, true);
+    $("wigleUpload").disabled = false;
+  } finally { uploadingToWigle = false; }
+}
+
+/* Clipboard API requires a secure context; local HTTP uses the selection fallback. */
+function copyMacButton(mac) {
+  const button = document.createElement("button");
+  button.type = "button"; button.className = "mac-copy";
+  button.title = t("copyMac"); button.setAttribute("aria-label", t("copyMac") + " " + mac);
+  button.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h2"/></svg>';
+  button.onclick = async (event) => {
+    event.stopPropagation();
+    try {
+      if (window.isSecureContext && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(mac);
+      } else {
+        const field = document.createElement("textarea");
+        field.value = mac; field.setAttribute("readonly", "");
+        field.style.cssText = "position:fixed;left:-9999px;top:0";
+        document.body.appendChild(field);
+        try { field.select(); if (!document.execCommand("copy")) throw new Error("copy"); }
+        finally { field.remove(); }
+      }
+      msg(t("copiedMac"), true);
+    } catch (_) { msg(t("copyMacFailed"), false); }
+  };
+  return button;
+}
+
+let observationRequest = 0;
+let observationCursors = [""];
+async function loadObservations() {
+  const request = ++observationRequest;
+  const page = state.page;
+  const type = $("obsType").value;
+  let url = "/api/observations?page=" + page + "&type=" + encodeURIComponent(type);
+  if (state.sort) {
+    url += "&sort=" + encodeURIComponent(state.sort) + "&dir=" + encodeURIComponent(state.dir);
+    if (page > 1 && observationCursors[page - 1]) url += "&cursor=" + observationCursors[page - 1];
+  }
+  const obsFrom = obsDateTime("obsFrom");
+  if (obsFrom) url += "&from=" + obsFrom;
+  const obsTo = obsDateTime("obsTo");
+  if (obsFrom && obsTo && obsFrom > obsTo) {
+    $("obsNote").textContent = lang === "fr" ? "La date de début doit précéder la date de fin." : "The start must be before the end.";
+    return;
+  }
+  if (obsTo) url += "&to=" + obsTo;
+  try {
+    const j = await get(url);
+    if (request !== observationRequest) return;
+    state.pages = j.pages || 1;
+    if (state.sort && j.has_next && j.next_cursor) observationCursors[page] = j.next_cursor;
+    if (state.page > state.pages) { state.page = state.pages; return loadObservations(); }
+    const tb = $("obsBody");
+    tb.innerHTML = "";
+    if (!j.observations) return;
+    if (!j.observations.length) {
+      const ne = document.createElement("tr");
+      const nd = document.createElement("td");
+      nd.colSpan = 7;
+      nd.style.color = "var(--muted)";
+      nd.textContent = t("obsEmpty");
+      ne.appendChild(nd);
+      tb.appendChild(ne);
+    }
+    for (const o of j.observations) {
+      const tr = document.createElement("tr");
+      tr.className = "clickable";
+      const td1 = document.createElement("td"); td1.textContent = fmtLocal(o.ts); td1.title = "UTC " + o.ts;
+      const td2 = document.createElement("td"); td2.textContent = o.mac; if (o.mac) td2.appendChild(copyMacButton(o.mac));
+      const td3 = document.createElement("td"); td3.textContent = o.ssid;
+      const td4 = document.createElement("td"); td4.textContent = o.rssi;
+      const td5 = document.createElement("td");
+      td5.textContent = qualityLabel(o.tsq);
+      td5.title = qualityExplanation(o.tsq);
+      const td6 = document.createElement("td");
+      const sp = document.createElement("span");
+      sp.className = "pill " + (o.type === "BLE" ? "ble" : "wifi");
+      sp.textContent = o.type;
+      td6.appendChild(sp);
+      const td7 = document.createElement("td");
+      const add = document.createElement("button");
+      add.className = "secondary";
+      add.dataset.excludeMac = (o.mac || "").toUpperCase();
+      add.textContent = excludedMacs.has(add.dataset.excludeMac) ? "✓" : "+";
+      add.disabled = excludedMacs.has(add.dataset.excludeMac);
+      add.title = add.disabled ? t("excluded") : t("exclude");
+      add.setAttribute("aria-label", add.title + " " + add.dataset.excludeMac);
+      add.onclick = async (event) => {
+        event.stopPropagation();
+        add.disabled = true;
+        try { await excludeDevice(o.mac, o.ssid || ""); }
+        catch (e) { add.disabled = false; msg(t("netErr") + ": " + e.message, false); }
+      };
+      td7.appendChild(add);
+      tr.append(td1, td2, td3, td4, td5, td6, td7);
+      tr.onclick = () => showHistory(o.mac, o.type);
+      tb.appendChild(tr);
+    }
+    $("obsNote").textContent = j.truncated ? t("obsTruncated") : "";
+    $("pageInfo").textContent = (lang === "fr" ? "Page " : "Page ") + state.page + (j.has_next ? " +" : "");
+    $("prevBtn").disabled = state.page <= 1;
+    $("nextBtn").disabled = state.page >= state.pages;
+  } catch (e) { msg(t("netErr") + ": " + e.message, false); }
+}
+
+/* --- historique de l'equipement + carte --- */
+
+let histItems = [];
+let histSel = -1;
+let histSeq = 0;
+
+/* Les codes renvoyes par /api/wigle sont traduits : une liste vide doit
+   expliquer sa cause (identifiants, reseau, refus WiGLE) a l'utilisateur. */
+function wigleErrText(code) {
+  if (code === "not_configured") return t("wigleNoCredentials");
+  if (code === "network" || code === "no_response" || code === "http_init") return lang === "fr" ? "Connexion sécurisée à WiGLE impossible : vérifiez le réseau, le certificat et la mémoire disponible." : "Secure connection to WiGLE failed: check the network, certificate and available memory.";
+  if (code === "http_401" || code === "http_403") return t("histAuth");
+  if (code === "nomem") return t("histMem");
+  if (code === "parse" || code === "read") return t("histBadAnswer");
+  if (code === "empty") return t("histEmpty");
+  if (code === "bad_mac") return t("histBadMac");
+  if (code && code.indexOf("http_") === 0) return t("histHttp") + " " + code.slice(5);
+  return t("histFail") + " (" + code + ")";
+}
+
+/* Une entree n'est placable sur la carte qu'avec des coordonnees plausibles. */
+function histCoords(o) {
+  const lat = Number(o.lat), lon = Number(o.lon);
+  if (!isFinite(lat) || !isFinite(lon)) return null;
+  if (lat === 0 && lon === 0) return null;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return { lat: lat, lon: lon };
+}
+
+function histRow(o, i) {
+  const tr = document.createElement("tr");
+  tr.className = "clickable";
+  const c = histCoords(o);
+  const td1 = document.createElement("td"); td1.textContent = o.ts ? fmtLocal(o.ts) : "—"; if (o.ts) td1.title = "UTC " + o.ts;
+  const td2 = document.createElement("td"); td2.textContent = o.mac || "—"; if (o.mac) td2.appendChild(copyMacButton(o.mac));
+  const td3 = document.createElement("td"); td3.textContent = o.ssid || "—";
+  const td4 = document.createElement("td");
+  td4.textContent = (o.rssi === undefined || o.rssi === null || o.rssi === 0) ? "—" : o.rssi;
+  const td5 = document.createElement("td");
+  td5.textContent = c ? (c.lat.toFixed(5) + ", " + c.lon.toFixed(5)) : "—";
+  if (!c) td5.style.color = "var(--muted)";
+  const td6 = document.createElement("td"); td6.textContent = o.source === "wigle" ? "WiGLE" : (lang === "fr" ? "Local" : "Local");
+  tr.append(td1, td2, td3, td4, td5, td6);
+  tr.onclick = () => { histSel = i; drawMap(i); markSelected(i); };
+  return tr;
+}
+
+function renderHist(list, info) {
+  const tb = $("histBody");
+  tb.innerHTML = "";
+  histItems = list;
+  for (let i = 0; i < list.length; i++) tb.appendChild(histRow(list[i], i));
+  $("histInfo").textContent = info || "";
+  histSel = list.length ? 0 : -1;
+  drawMap(histSel);
+  markSelected(histSel);
+}
+
+/* Local history is fetched first, then WiGLE, to avoid overlapping allocations. */
+function historyTimestamp(value) {
+  if (!value || value === "0") return -Infinity;
+  let iso = String(value).includes("T") ? String(value) : String(value).replace(" ", "T");
+  if (!/(Z|[+-]\d{2}:?\d{2})$/i.test(iso)) iso += "Z";
+  const n = Date.parse(iso); return Number.isFinite(n) ? n : -Infinity;
+}
+async function showHistory(mac, type) {
+  const seq = ++histSeq;
+  $("histPrompt").style.display = "none";
+  $("histInfo").textContent = t("histLoading");
+  $("histBody").innerHTML = ""; histItems = []; drawMap(-1);
+  const local = [], remote = [], notes = [];
+  let incomplete = false;
+  try {
+    const j = await get("/api/history?mac=" + encodeURIComponent(mac));
+    if (seq !== histSeq) return;
+    for (const o of (j.observations || [])) {
+      local.push({ ts:o.ts, mac:o.mac, ssid:o.ssid, rssi:o.rssi, lat:o.lat, lon:o.lon,
+                   acc:o.acc, type:o.type, source:"local" });
+    }
+    if (j.truncated) notes.push(lang === "fr" ? "Historique local limité aux 10 plus récents." : "Local history limited to the latest 10.");
+    if (local.length) renderHist(local, t("histLoading"));
+  } catch (e) {
+    if (seq !== histSeq) return;
+    notes.push(t("histLocalUnavailable"));
+  }
+  try {
+    const q = "/api/wigle?mac=" + encodeURIComponent(mac) + (type ? "&type=" + encodeURIComponent(type) : "");
+    const j = await get(q);
+    if (seq !== histSeq) return;
+    for (const r of (j.results || [])) {
+      remote.push({ ts:(j.summary_only ? (r.lasttime || r.time) : (r.time || r.lasttime)) || "", mac:r.mac || mac, ssid:r.ssid || "",
+                    rssi:r.rssi, lat:r.lat, lon:r.lon, acc:r.accuracy,
+                    type:r.networkType || type || "WIFI", source:"wigle" });
+    }
+    if (j.error) notes.push(wigleErrText(j.error));
+    else if (!remote.length) notes.push(t("noWigle"));
+    if (j.summary_only) notes.push(lang === "fr"
+      ? (j.detail_failed ? "WiGLE : position moyenne uniquement ; historique détaillé indisponible." : "WiGLE : position moyenne uniquement.")
+      : (j.detail_failed ? "WiGLE: average position only; detailed history unavailable." : "WiGLE: average position only."));
+    if (j.truncated) incomplete = true;
+  } catch (e) {
+    if (seq !== histSeq) return;
+    notes.push(t("netErr") + " : " + e.message);
+  }
+  const newestFirst = (a, b) => historyTimestamp(b.ts) - historyTimestamp(a.ts);
+  remote.sort(newestFirst);
+  local.sort(newestFirst);
+  const displayed = remote.slice(0, 10);
+  displayed.push(...local.slice(0, 10 - displayed.length));
+  displayed.sort(newestFirst);
+  if (local.length + remote.length > 10) notes.push(lang === "fr" ? "Affichage limité à 10 lignes, priorité à WiGLE." : "Display limited to 10 rows, WiGLE first.");
+  let info = t("histCombined");
+  if (incomplete) info += " · " + t("histPartial");
+  if (notes.length) info += " · " + notes.join(" · ");
+  renderHist(displayed, info);
+}
+
+/* Le canevas doit etre regle sur sa taille affichee : sinon le dessin et les
+   pixels visibles ne correspondent plus et les reperes sont decales. */
+function mapCanvas() {
+  const cv = $("map");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(cv.clientWidth || 0, 160);
+  const h = Math.max(cv.clientHeight || 0, 160);
+  const nw = Math.round(w * dpr), nh = Math.round(h * dpr);
+  if (cv.width !== nw || cv.height !== nh) { cv.width = nw; cv.height = nh; }
+  const ctx = cv.getContext("2d");
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { ctx: ctx, w: w, h: h };
+}
+
+function cssVar(name, fallback) {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
+/* --- carte : fond en tuiles OSM chargees par le navigateur du poste ---
+   La cle reste utilisable hors connexion : si les tuiles n'arrivent pas,
+   la grille de repere deja dessinee sert de fond. */
+const TILE_URL = "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+const TILE_SIZE = 256;
+const tileCache = new Map();
+const tileLoading = new Set();
+let tileRedraw = false;
+
+function tileUrl(z, x, y) {
+  return TILE_URL.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+}
+
+function worldX(lon, z) { return ((lon + 180) / 360) * TILE_SIZE * Math.pow(2, z); }
+
+function worldY(lat, z) {
+  const s = Math.max(-85.0511246, Math.min(85.0511246, lat));
+  const rad = Math.PI / 180;
+  return (1 - Math.log(Math.tan(s * rad) + 1 / Math.cos(s * rad)) / Math.PI) / 2
+         * TILE_SIZE * Math.pow(2, z);
+}
+
+function mPerPx(z, lat) { return 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, z); }
+
+function histZoom(spanM, w, h) {
+  const avail = Math.max(Math.min(w, h), 120);
+  const deg = Math.max(spanM, 100) / 111320;
+  let z = Math.floor(Math.log2((avail * 360) / (deg * TILE_SIZE)));
+  if (z < 6) z = 6;
+  if (z > 17) z = 17;
+  return z;
+}
+
+function drawTiles(ctx, ox, oy, w, h, z) {
+  const n = Math.pow(2, z);
+  const tx0 = Math.floor(ox / TILE_SIZE);
+  const ty0 = Math.floor(oy / TILE_SIZE);
+  const tx1 = Math.floor((ox + w - 1) / TILE_SIZE);
+  const ty1 = Math.floor((oy + h - 1) / TILE_SIZE);
+  for (let nty = ty0; nty <= ty1; nty++) {
+    for (let ntx = tx0; ntx <= tx1; ntx++) {
+      if (ntx < 0 || nty < 0 || ntx >= n || nty >= n) continue;
+      const key = z + "/" + ntx + "/" + nty;
+      const img = tileCache.get(key);
+      if (img) { ctx.drawImage(img, ntx * TILE_SIZE - ox, nty * TILE_SIZE - oy, TILE_SIZE, TILE_SIZE); continue; }
+      if (tileLoading.has(key)) continue;
+      tileLoading.add(key);
+      const im = new Image();
+      im.onload = () => { tileLoading.delete(key); tileCache.set(key, im); queueTileRedraw(); };
+      im.onerror = () => { tileLoading.delete(key); };
+      im.src = tileUrl(z, ntx, nty);
+    }
+  }
+}
+
+function queueTileRedraw() {
+  if (tileRedraw) return;
+  tileRedraw = true;
+  setTimeout(() => { tileRedraw = false; drawMap(histSel); }, 0);
+}
+
+function drawMap(idx) {
+  const m = mapCanvas(), ctx = m.ctx, w = m.w, h = m.h;
+  const grid = cssVar("--border", "#30363d");
+  const muted = cssVar("--muted", "#8b949e");
+  const accent = cssVar("--accent", "#58a6ff");
+  ctx.fillStyle = cssVar("--bg", "#0d1117");
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = grid; ctx.lineWidth = 1;
+  for (let x = 0.5; x <= w; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+  for (let y = 0.5; y <= h; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+
+  const pts = [];
+  for (let i = 0; i < histItems.length; i++) {
+    const c = histCoords(histItems[i]);
+    if (c) pts.push({ i: i, lat: c.lat, lon: c.lon });
+  }
+  if (!pts.length) {
+    ctx.fillStyle = muted; ctx.font = "13px system-ui, sans-serif";
+    ctx.textAlign = "center"; ctx.textBaseline = "middle";
+    ctx.fillText(t("histNoCoords"), w / 2, h / 2);
+    $("mapInfo").textContent = "";
+    return;
+  }
+
+  /* Projection relative : centre sur le nuage de points, meme echelle sur les
+     deux axes, sinon un deplacement de quelques metres parait distort. */
+  let minLat = pts[0].lat, maxLat = pts[0].lat, minLon = pts[0].lon, maxLon = pts[0].lon;
+  for (const p of pts) {
+    if (p.lat < minLat) minLat = p.lat; if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lon < minLon) minLon = p.lon; if (p.lon > maxLon) maxLon = p.lon;
+  }
+  const midLat = (minLat + maxLat) / 2;
+  const midLon = (minLon + maxLon) / 2;
+  const dLat = (maxLat - minLat) * 111320;
+  const dLon = (maxLon - minLon) * 111320 * Math.cos(midLat * Math.PI / 180);
+  const z = histZoom(Math.max(dLat, dLon), w, h);
+  /* Centre sur la ligne selectionnee, sinon sur la boite englobante. */
+  const sel0 = (idx >= 0 && idx < histItems.length) ? histCoords(histItems[idx]) : null;
+  const ox = worldX(sel0 ? sel0.lon : midLon, z) - w / 2;
+  const oy = worldY(sel0 ? sel0.lat : midLat, z) - h / 2;
+  drawTiles(ctx, ox, oy, w, h, z);
+  for (const p of pts) { p.px = worldX(p.lon, z) - ox; p.py = worldY(p.lat, z) - oy; }
+
+  /* Trame chronologique, pour lire un deplacement dans le temps. */
+  const ordered = pts.slice().sort((a, b) => {
+    const ta = String((histItems[a.i] && histItems[a.i].ts) || "");
+    const tb = String((histItems[b.i] && histItems[b.i].ts) || "");
+    return ta < tb ? -1 : (ta > tb ? 1 : 0);
+  });
+  if (ordered.length > 1) {
+    ctx.strokeStyle = muted; ctx.globalAlpha = 0.45; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < ordered.length; i++) {
+      if (i === 0) ctx.moveTo(ordered[i].px, ordered[i].py);
+      else ctx.lineTo(ordered[i].px, ordered[i].py);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+
+  ctx.fillStyle = muted;
+  for (const p of pts) {
+    if (p.i === idx) continue;
+    ctx.beginPath(); ctx.arc(p.px, p.py, 3, 0, 2 * Math.PI); ctx.fill();
+  }
+
+  const sel = pts.find((p) => p.i === idx) || pts[pts.length - 1];
+  const item = histItems[sel.i] || {};
+  const c = histCoords(item);
+  const acc = Number(item.acc) || 0;
+  if (acc > 0 && c) {
+    const r = Math.min(Math.max(acc / mPerPx(z, c.lat), 5), Math.min(w, h) / 2);
+    ctx.strokeStyle = accent; ctx.globalAlpha = 0.5; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(sel.px, sel.py, r, 0, 2 * Math.PI); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
+  ctx.strokeStyle = accent; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(sel.px, sel.py, 11, 0, 2 * Math.PI); ctx.stroke();
+  ctx.fillStyle = accent;
+  ctx.beginPath(); ctx.arc(sel.px, sel.py, 5, 0, 2 * Math.PI); ctx.fill();
+
+  let line = (item.ts ? fmtLocal(item.ts) : "—") + "  " + (c ? c.lat.toFixed(5) + "," + c.lon.toFixed(5) : "—");
+  if (acc > 0) line += "  ±" + Math.round(acc) + " m";
+  if (item.rssi) line += "  " + item.rssi + " dBm";
+  $("mapInfo").textContent = line;
+}
+
+function markSelected(idx) {
+  const rows = $("histBody").children;
+  for (let i = 0; i < rows.length; i++) {
+    rows[i].style.background = (i === idx) ? "var(--hover)" : "";
+  }
+}
+
+let histResizeTimer = null;
+window.addEventListener("resize", () => {
+  if (!histItems.length) return;
+  clearTimeout(histResizeTimer);
+  histResizeTimer = setTimeout(() => drawMap(histSel), 150);
+});
+
+let exporting = false;
+
+/* Wait for a complete HTTP response before offering the file. In particular an
+   interrupted chunked response must not be saved as a successful CSV export. */
+async function exportJournal() {
+  if (exporting) return;
+  const from = $("exFrom").value, to = $("exTo").value;
+  if (!from || !to || from > to) { msg(t("badDates"), false); return; }
+  const fromTs = Math.floor(Date.parse(from + "T00:00:00Z") / 1000);
+  const toTs = Math.floor(Date.parse(to + "T23:59:59Z") / 1000);
+  if (!Number.isFinite(fromTs) || !Number.isFinite(toTs)) { msg(t("badDates"), false); return; }
+  exporting = true;
+  const btn = $("exportBtn"), lbl = $("exportLbl");
+  btn.disabled = true;
+  lbl.textContent = t("exporting");
+  try {
+    const response = await fetch("/api/export?from=" + fromTs + "&to=" + toTs,
+                                 { credentials: "same-origin", cache: "no-store" });
+    if (!response.ok || !(response.headers.get("content-type") || "").toLowerCase().startsWith("text/csv"))
+      throw new Error("HTTP " + response.status);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const disposition = response.headers.get("content-disposition") || "";
+    const filename = /filename="([A-Za-z0-9_.-]+)"/.exec(disposition);
+    a.download = filename ? filename[1] : "rfsentinel_journal.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    msg(t("exportStart"), true);
+  } catch (e) {
+    if (e.message !== "unauthorized") msg(t("exportFail") + " : " + e.message, false);
+  } finally {
+    btn.disabled = false; lbl.textContent = t("exportBtn"); exporting = false;
+  }
+}
+
+let purgePending = null;
+
+function openPurgeConfirm() {
+  const f = $("puFrom").value, to = $("puTo").value;
+  if (!f || !to) { msg(lang === "fr" ? "Choisissez début et fin" : "Choose start and end", false); return; }
+  purgePending = { from: f, to: to };
+  $("confirmTitle").textContent = t("purgeConfirmTitle");
+  $("confirmBody").textContent = t("purgeConfirmBody").replace("{from}", f).replace("{to}", to);
+  $("confirmModal").classList.add("open");
+  $("confirmNo").focus();
+}
+
+function closePurgeConfirm() {
+  $("confirmModal").classList.remove("open");
+  purgePending = null;
+}
+async function purgeRange(dates) {
+  const f = (dates && dates.from) || $("puFrom").value;
+  const to = (dates && dates.to) || $("puTo").value;
+  if (!f || !to) { msg(lang === "fr" ? "Choisissez debut et fin" : "Choose start and end", false); return; }
+  const from = Math.floor(new Date(f + "T00:00:00").getTime() / 1000);
+  const toTs = Math.floor(new Date(to + "T23:59:59").getTime() / 1000);
+  if (!isFinite(from) || !isFinite(toTs)) { msg(t("badDates"), false); return; }
+  try {
+    const j = await post("/api/purge", { from: from, to: toTs });
+    if (j.ok) await monitorPurge();
+  } catch (e) { msg(t("netErr") + ": " + e.message, false); }
+}
+
+async function monitorPurge() {
+  $("purgeBtn").disabled = true;
+  $("purgeInfo").textContent = lang === "fr" ? "Purge en cours…" : "Purging…";
+  try {
+    while (true) {
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      const j = await get("/api/purge/status");
+      if (j.running) continue;
+      if (j.error) {
+        $("purgeInfo").textContent = (lang === "fr" ? "Purge interrompue, observations supprimées : " : "Purge interrupted, observations removed: ") + j.removed;
+      } else {
+        $("purgeInfo").textContent = (lang === "fr" ? "Observations supprimées : " : "Observations removed: ") + j.removed;
+      }
+      observationCursors = [""];
+      state.page = 1;
+      await loadObservations();
+      break;
+    }
+  } catch (e) {
+    $("purgeInfo").textContent = lang === "fr" ? "Suivi interrompu ; la purge peut continuer sur l’appareil." : "Status unavailable; purge may still be running on the device.";
+  } finally { $("purgeBtn").disabled = false; }
+}
+
+/* --- blacklist --- */
+async function loadBlacklist() {
+  try {
+    const j = await get("/api/blacklist");
+    excludedMacs = new Set((j.items || []).map((it) => (it.mac || "").toUpperCase()));
+    updateExcludeButtons();
+    const ul = $("blList");
+    ul.innerHTML = "";
+    if (!j.items) return;
+    for (const it of j.items) {
+      const li = document.createElement("li");
+      const s = document.createElement("span");
+      s.textContent = it.mac + " — " + (it.label || "");
+      const b = document.createElement("button");
+      b.className = "danger";
+      b.textContent = "✕";
+      b.style.cssText = "float:right;padding:2px 8px";
+      b.onclick = async () => {
+        await post("/api/blacklist/remove", { mac: it.mac });
+        excludedMacs.delete((it.mac || "").toUpperCase());
+        updateExcludeButtons();
+        await loadBlacklist();
+      };
+      li.appendChild(s); li.appendChild(b);
+      ul.appendChild(li);
+    }
+  } catch (e) { msg(t("netErr") + ": " + e.message, false); }
+}
+
+async function excludeDevice(mac, label) {
+  await post("/api/blacklist/add", { mac, label });
+  excludedMacs.add(mac.toUpperCase());
+  updateExcludeButtons();
+  msg(t("excludeAdded"), true);
+  await loadBlacklist();
+}
+
+async function blAdd() {
+  const mac = $("blMac").value.trim();
+  if (!mac) return;
+  try {
+    await excludeDevice(mac, $("blLabel").value.trim());
+    $("blMac").value = ""; $("blLabel").value = "";
+  } catch (e) { msg(t("netErr") + ": " + e.message, false); }
+}
+
+async function loadPresence(loadSettings = false) {
+  try {
+    const j = await get("/api/presence");
+    if (loadSettings) {
+      $("cfPresenceTopic").value = j.topic;
+      $("cfPresenceAbsence").value = Number((j.absence_s / 60).toFixed(6));
+      presenceSettingsLoaded = true;
+    }
+    const ul = $("presenceList"); ul.replaceChildren();
+    for (const it of (j.items || [])) {
+      const li = document.createElement("li"), text = document.createElement("span"), button = document.createElement("button");
+      text.textContent = it.mac + " — " + (it.label || "");
+      button.className = "danger"; button.textContent = "✕"; button.style.cssText = "float:right;padding:2px 8px";
+      button.setAttribute("aria-label", (lang === "fr" ? "Supprimer " : "Remove ") + it.mac);
+      button.onclick = async () => {
+        try { await post("/api/presence", { action:"remove", mac:it.mac }); await loadPresence(); }
+        catch (e) { msg(t("presenceSavedError") + " " + e.message, false); }
+      };
+      li.append(text, button); ul.appendChild(li);
+    }
+  } catch (e) { msg(t("presenceSavedError") + " " + e.message, false); }
+}
+async function addPresence() {
+  const mac = $("presenceMac").value.trim().toUpperCase();
+  if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(mac)) { msg(t("calBadMac"), false); return; }
+  try {
+    await post("/api/presence", {action:"add", mac, label:$("presenceLabel").value.trim()});
+    $("presenceMac").value = ""; $("presenceLabel").value = ""; await loadPresence();
+  } catch (e) { msg(t("presenceSavedError") + " " + e.message, false); }
+}
+
+async function refresh() {
+  if (!state.logged) return;
+  try {
+    const j = await get("/api/scan/status");
+    if (j.version) $("hdrVersion").textContent = "v" + j.version;
+    if (j.version) $("ftrVersion").textContent = "v" + j.version;
+    $("stMode").textContent = j.mode || "—";
+    $("stIp").textContent = j.ip || "—";
+    const clockKnown = j.tsq !== "UNKNOWN" && !!j.ts;
+    $("stTime").textContent = clockKnown ? (j.ts_local || j.ts) : (lang === "fr" ? "Non synchronisée" : "Not synchronized");
+    $("stTime").title = clockKnown && j.ts_local ? ("UTC " + j.ts) : "";
+    $("stTsq").textContent = qualityLabel(j.tsq);
+    $("stTsq").title = qualityExplanation(j.tsq);
+    $("timeInfo").textContent = j.mode === "AP" && j.tsq !== "NTP_SYNCED"
+      ? (lang === "fr" ? "NTP nécessite un accès réseau. Vous pouvez aussi régler une heure estimée depuis cet appareil." : "NTP needs network access. You can also set an estimated time from this device.") : "";
+    $("timeSyncBtn").style.display = j.tsq === "NTP_SYNCED" ? "none" : "";
+    const syncKnown = !!j.last_sync && j.last_sync !== "0";
+    $("stSync").textContent = syncKnown ? (j.last_sync_local || j.last_sync) : "—";
+    $("stSync").title = syncKnown && j.last_sync_local ? ("UTC " + j.last_sync) : "";
+    const countPending = j.store_ok ? (lang === "fr" ? "Calcul…" : "Counting…") : (lang === "fr" ? "Indisponible" : "Unavailable");
+    $("stWifi").textContent = j.wifi == null ? countPending : j.wifi;
+    $("stBle").textContent = j.ble == null ? countPending : j.ble;
+    if (j.wifi_scan_attempts > 0) {
+      const ch = j.wifi_scan_channel ? (lang === "fr" ? "canal " : "channel ") + j.wifi_scan_channel : (lang === "fr" ? "tous canaux" : "all channels");
+      const last = lang === "fr" ? "Dernier scan Wi-Fi 2,4 GHz : il y a " : "Last 2.4 GHz Wi-Fi scan: ";
+      $("wifiScanInfo").textContent = j.wifi_scan_error
+        ? last + j.wifi_scan_age + " s · " + ch + " · " + (lang === "fr" ? "erreur " : "error ") + j.wifi_scan_error
+        : last + j.wifi_scan_age + " s · " + ch + " · " + j.wifi_scan_found + (lang === "fr" ? " détectés, " : " found, ") + j.wifi_scan_saved + (lang === "fr" ? " enregistrés" : " saved");
+      if (j.wifi_scan_channel_count) $("wifiScanInfo").textContent += (lang === "fr" ? " · plage configurée " : " · configured range ") + j.wifi_scan_first + "–" + (j.wifi_scan_first + j.wifi_scan_channel_count - 1);
+      $("wifiScanInfo").title = lang === "fr" ? "Un réseau détecté peut ne pas être enregistré à nouveau à cause du délai de redécouverte, du seuil RSSI ou d’une exclusion." : "A detected network may not be saved again due to the rediscovery interval, RSSI threshold, or an exclusion.";
+    } else $("wifiScanInfo").textContent = lang === "fr" ? "Aucun scan Wi-Fi terminé." : "No Wi-Fi scan completed.";
+    $("stScan").textContent = j.running ? (lang === "fr" ? "En cours" : "Running") : (lang === "fr" ? "Arrêté" : "Stopped");
+    $("stScan").className = j.running ? "badge ok" : "badge warn";
+    $("startBtn").disabled = !!j.running;
+    $("stopBtn").disabled = !j.running;
+    $("startBtn").className = j.running ? "secondary" : "";
+    $("stopBtn").className = j.running ? "" : "secondary";
+    $("stStore").textContent = j.store_ok ? Math.round(j.store_used / 1024) + " Ko / " + Math.round(j.store_total / 1024) + " Ko" : "—";
+    $("stMqtt").textContent = j.mqtt_connected ? "connecte" : "hors ligne";
+  } catch (e) {
+    $("stScan").textContent = lang === "fr" ? "État indisponible" : "Status unavailable";
+    $("stScan").className = "badge warn";
+    $("startBtn").disabled = true;
+    $("stopBtn").disabled = true;
+  }
+}
+
+let calibrationStatus = null;
+let calibrationPolling = false;
+let findStatus = null;
+function renderFind(c, result) {
+  findStatus = result;
+  const active = !!c.active;
+  $("findPanel").style.display = "block";
+  $("findNext").disabled = !active || !!c.stopping;
+  $("findCancel").disabled = !active || !!c.stopping;
+  $("findNext").textContent = t(["findNextFar", "findNextNear", "findFinish"][result.stage] || "findFinish");
+  let status = active ? t(["findNear1", "findFar", "findNear2"][result.stage] || "findNear2") : t("findResults");
+  if (result.overflow) status += " · " + t("findOverflow");
+  if (c.radio_error) status += " · " + t("calError");
+  if (c.resume_error) status += " · " + t("calResumeError");
+  $("findStatus").textContent = status;
+  const list = $("findList"); list.replaceChildren();
+  if (active) return;
+  const rows = (result.candidates || []).map(r => {
+    const complete = r.counts && r.counts.every(n => n > 0);
+    return { ...r, complete, score: complete ? Math.min(r.near1 - r.far, r.near2 - r.far) : null };
+  }).sort((a,b) => (b.score ?? -999) - (a.score ?? -999));
+  if (!rows.some(r => r.complete)) {
+    const p = document.createElement("p"); p.textContent = t("findEmpty"); list.appendChild(p);
+  }
+  for (const r of rows) {
+    const row = document.createElement("div");
+    row.style.cssText = "display:flex;align-items:center;gap:8px;justify-content:space-between;flex-wrap:wrap;margin:6px 0";
+    const text = document.createElement("span");
+    text.textContent = r.mac + " · " + (r.complete ?
+      (r.score > 0 ? t("findScore") + ": " + r.score + " dB" : t("findUncertain")) : t("findInsufficient")) +
+      " · " + r.rssi + " dBm · " + r.age + " s · " + (r.counts || []).join("/");
+    const button = document.createElement("button"); button.type = "button"; button.className = "secondary";
+    button.textContent = t("findSelect"); button.setAttribute("aria-label", t("findSelect") + " " + r.mac);
+    button.onclick = () => { $("calMac").value = r.mac; msg(t("findSelected"), true); };
+    row.append(text, button); list.appendChild(row);
+  }
+}
+async function updateCalibration() {
+  if (!state.logged || calibrationPolling) return;
+  calibrationPolling = true;
+  try {
+    const c = await get("/api/calibration");
+    calibrationStatus = c;
+    const finding = c.kind === "find";
+    if (c.active && !finding && document.activeElement !== $("calMac")) $("calMac").value = c.mac;
+    $("findStart").disabled = !!c.active;
+    $("calZone").disabled = !!c.active;
+    $("calAlert").disabled = !!c.active;
+    $("calMac").disabled = !!c.active;
+    $("calStop").disabled = !c.active || !!c.stopping || finding;
+    $("calApply").disabled = !!c.active || !c.has_sample || !!c.radio_error || finding;
+    if (finding) {
+      $("calStatus").textContent = "";
+      renderFind(c, await get("/api/calibration/find"));
+      return;
+    }
+    $("findPanel").style.display = "none";
+    let status = c.kind ? (c.active ? t("calActive") : t("calFinished")) + " · " +
+      (c.kind === "alert" ? t("calAlert") : t("calZone")) + " · " + c.mac : t("calIdle");
+    if (c.has_sample) status += " · " + t("calMinimum") + ": " + c.minimum + " dBm · " +
+      t("calLatest") + ": " + c.rssi + " dBm · " + c.samples + " " + t("calSamples") +
+      " · " + t("calAge") + " " + c.age + " s";
+    else if (c.active) status += " · " + t("calWaiting") + " " + c.mac;
+    else if (c.kind) status += " · " + t("calNoSignal");
+    if (c.radio_error) status += " · " + t("calError");
+    if (c.resume_error) status += " · " + t("calResumeError");
+    $("calStatus").textContent = status;
+  } catch (e) {
+    $("calStatus").textContent = t("calError") + " " + e.message;
+  } finally { calibrationPolling = false; }
+}
+async function startFind() {
+  $("findStart").disabled = true;
+  try { await post("/api/calibration", {action:"find_start"}); await updateCalibration(); }
+  catch (e) { msg(t("calError") + " " + e.message, false); $("findStart").disabled = false; }
+}
+async function nextFind() {
+  if (!findStatus) return;
+  $("findNext").disabled = true;
+  try {
+    await post("/api/calibration", {action:findStatus.stage < 2 ? "find_next" : "stop"});
+    await updateCalibration();
+  } catch (e) { msg(t("calError") + " " + e.message, false); }
+}
+async function startCalibration(kind) {
+  const mac = $("calMac").value.trim().toUpperCase();
+  if (!/^([0-9A-F]{2}:){5}[0-9A-F]{2}$/.test(mac)) { msg(t("calBadMac"), false); return; }
+  $("calZone").disabled = $("calAlert").disabled = true;
+  try { await post("/api/calibration", { action:"start", mac, kind }); await updateCalibration(); }
+  catch (e) { msg(t("calError") + " " + e.message, false); $("calZone").disabled = $("calAlert").disabled = false; }
+}
+async function stopCalibration() {
+  $("calStop").disabled = true;
+  try { await post("/api/calibration", { action:"stop" }); await updateCalibration(); }
+  catch (e) { msg(t("calError") + " " + e.message, false); }
+}
+async function applyCalibration() {
+  if (!calibrationStatus || !calibrationStatus.kind) return;
+  $("calApply").disabled = true;
+  try {
+    await post("/api/calibration", { action:"apply", kind:calibrationStatus.kind });
+    const id = calibrationStatus.kind === "alert" ? "cfMqRssi" : "cfMinRssi";
+    $(id).value = calibrationStatus.minimum;
+    msg(t("calSaved"), true);
+  } catch (e) { msg(t("calError") + " " + e.message, false); }
+  finally { await updateCalibration(); }
+}
+
+/* --- init --- */
+async function init() {
+  try {
+    const j = await get("/api/config");
+    if (j && j.ok !== false) {
+      setLoggedIn(true);
+      if (typeof j.ui_lang === "number") {
+        lang = j.ui_lang === 1 ? "en" : "fr";
+        $("lang").value = lang;
+      }
+    } else {
+      setLoggedIn(false);
+    }
+  } catch (e) { setLoggedIn(false); }
+  applyI18n();
+  if (!state.logged) return;
+  await refresh();
+  await loadConfig();
+  await loadObservations();
+  await loadBlacklist();
+  await loadPresence(true);
+  await refresh();
+}
+
+$("lang").onchange = () => {
+  lang = $("lang").value;
+  applyI18n();
+  if (state.logged) { refresh(); loadObservations(); }
+};
+$("themeBtn").onclick = () => {
+  const cur = document.documentElement.getAttribute("data-theme");
+  const next = cur === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", next);
+  updateThemeButton();
+  try { localStorage.setItem("rfs-theme", next); } catch (e) {}
+  if (histItems.length) drawMap(histSel);
+};
+bindSecretToggles();
+try {
+  const st = localStorage.getItem("rfs-theme");
+  if (st === "light" || st === "dark") document.documentElement.setAttribute("data-theme", st);
+} catch (e) {}
+$("scanNav").onclick = () => setView("scan");
+$("configNav").onclick = () => setView("config");
+$("loginBtn").onclick = doLogin;
+$("logoutNav").onclick = doLogout;
+$("timeSyncBtn").onclick = async () => {
+  $("timeSyncBtn").disabled = true;
+  try {
+    await post("/api/time", {epoch: Math.floor(Date.now() / 1000)});
+    msg(lang === "fr" ? "Heure réglée depuis cet appareil (estimée)." : "Time set from this device (estimated).", true);
+    await refresh();
+  } catch (e) { msg(t("netErr") + ": " + e.message, false); }
+  finally { $("timeSyncBtn").disabled = false; }
+};
+$("startBtn").onclick = async () => { try { await post("/api/scan/start", null);
+    msg(lang === "fr" ? "Scan démarré" : "Scan started", true); } catch (e) { msg(e.message, false); } refresh();
+    setTimeout(() => { loadObservations(); }, 6000); };
+$("stopBtn").onclick = async () => { try { await post("/api/scan/stop", null);
+    msg(lang === "fr" ? "Scan arrete" : "Scan stopped", true); } catch (e) { msg(e.message, false); } refresh(); };
+$("refreshBtn").onclick = () => { loadObservations(); refresh(); };
+$("cfgSave").onclick = saveConfig;
+$("geoSearch").onclick = searchAddress;
+$("geoUse").onclick = useAddress;
+$("geoResults").onchange = () => { $("geoUse").disabled = $("geoResults").value === ""; };
+$("geoAddress").oninput = () => {
+  geoRequest++;
+  clearGeoResults();
+  $("geoSearch").disabled = false;
+  $("geoStatus").textContent = "";
+};
+$("geoAddress").onkeydown = (event) => {
+  if (event.key === "Enter") { event.preventDefault(); searchAddress(); }
+};
+$("wigleUpload").onclick = openWigleConfirm;
+$("wigleNo").onclick = closeWigleConfirm;
+$("wigleYes").onclick = wigleUpload;
+$("wigleModal").onclick = (ev) => { if (ev.target === $("wigleModal")) closeWigleConfirm(); };
+$("purgeBtn").onclick = openPurgeConfirm;
+$("exportBtn").onclick = exportJournal;
+$("calZone").onclick = () => startCalibration("zone");
+$("calAlert").onclick = () => startCalibration("alert");
+$("calStop").onclick = stopCalibration;
+$("calApply").onclick = applyCalibration;
+$("findStart").onclick = startFind;
+$("findNext").onclick = nextFind;
+$("findCancel").onclick = stopCalibration;
+$("confirmNo").onclick = closePurgeConfirm;
+$("confirmYes").onclick = () => { const d = purgePending; closePurgeConfirm(); if (d) purgeRange(d); };
+$("confirmModal").onclick = (ev) => { if (ev.target === $("confirmModal")) closePurgeConfirm(); };
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && $("confirmModal").classList.contains("open")) closePurgeConfirm();
+});
+$("blAdd").onclick = blAdd;
+$("presenceAdd").onclick = addPresence;
+$("prevBtn").onclick = () => { if (state.page > 1) { state.page--; loadObservations(); } };
+$("nextBtn").onclick = () => { if (state.page < state.pages) { state.page++; loadObservations(); } };
+$("obsType").onchange = () => obsReload();
+
+/* --- tri par colonne et filtre par date dans Observations --- */
+/* Le journal est en UTC (format CSV WiGLE). Les affichages passent par ici
+   pour montrer l'heure locale sans jamais modifier l'heure stockee. */
+function fmtLocal(tsUtc) {
+  if (!tsUtc || tsUtc === "0") return tsUtc || "";
+  let iso = tsUtc.includes("T") ? tsUtc : tsUtc.replace(" ", "T");
+  if (!/(Z|[+-]\d{2}:?\d{2})$/.test(iso)) iso += "Z";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return tsUtc;
+  const p = (x) => String(x).padStart(2, "0");
+  return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) +
+         " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+}
+
+/* Saisie locale du filtre : convertie en UTC pour la requete. */
+function obsDateTime(id) {
+  const v = $(id).value;
+  if (!v) return 0;
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(v);
+  if (!m) return 0;
+  const n = m.slice(1).map(Number);
+  if (n[1] < 1 || n[1] > 12 || n[2] < 1 || n[2] > 31 || n[3] > 23 ||
+      n[4] > 59 || (n[5] != null && n[5] > 59)) return 0;
+  const d = new Date(n[0], n[1] - 1, n[2], n[3], n[4], n[5] || 0);
+  return isNaN(d.getTime()) ? 0 : Math.floor(d.getTime() / 1000);
+}
+
+function obsSortHeader() {
+  document.querySelectorAll("#obsTable th[data-sort]").forEach((th) => {
+    th.classList.remove("sort-asc", "sort-desc");
+    if (th.dataset.sort === state.sort) th.classList.add(state.dir === "desc" ? "sort-desc" : "sort-asc");
+  });
+}
+
+function obsReload() {
+  observationCursors = [""];
+  state.page = 1;
+  $("obsBody").innerHTML = "";
+  $("pageInfo").textContent = lang === "fr" ? "Chargement…" : "Loading…";
+  loadObservations();
+}
+
+document.querySelectorAll("#obsTable th[data-sort]").forEach((th) => {
+  th.onclick = () => {
+    const col = th.dataset.sort;
+    if (state.sort === col) state.dir = state.dir === "asc" ? "desc" : "asc";
+    else { state.sort = col; state.dir = col === "date" ? "desc" : "asc"; }
+    obsSortHeader();
+    obsReload();
+  };
+});
+
+$("obsFrom").onchange = () => obsReload();
+$("obsTo").onchange = () => obsReload();
+$("obsFilterReset").onclick = () => { $("obsFrom").value = ""; $("obsTo").value = ""; obsReload(); };
+
+
+$('loginUser').addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") { ev.preventDefault(); $("loginPass").focus(); }
+});
+$('loginPass').addEventListener("keydown", (ev) => {
+  if (ev.key === "Enter") { ev.preventDefault(); doLogin(); }
+});
+$('loginBtn').disabled = true;
+init().finally(() => { $('loginBtn').disabled = false; });
+let observationsRefreshing = false;
+setInterval(() => { if (state.logged && state.view === "config") updateCalibration(); }, 2000);
+setInterval(() => {
+  if (uploadingToWigle) return;
+  refresh();
+  // A sorted page scans the complete journal; refresh it only on user request.
+  if (state.logged && state.view === "scan" && !state.sort && !observationsRefreshing) {
+    observationsRefreshing = true;
+    loadObservations().finally(() => { observationsRefreshing = false; });
+  }
+}, 15000);
+</script>
+</body>
+</html>

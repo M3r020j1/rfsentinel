@@ -1,0 +1,89 @@
+# RFSentinel — exclusions pour le depot public
+
+# --- Build ESP-IDF -----------------------------------------------------
+build/
+managed_components/
+sdkconfig
+sdkconfig.old
+sdkconfig.ci
+.build*.log
+build_log*.txt
+.esp_idf_project.yml
+
+# --- Artefacts de flash (publies en GitHub Release, pas en branche) ----
+*.bin
+*.elf
+*.map
+flash_args
+flash_app_args
+flash_project_args
+flash_args.in
+*.uf2
+
+# Le flasher du depot a besoin de ses images : elles sont suivies malgre *.bin
+!webtool/firmware/*.bin
+
+# --- Sauvegardes locales (contiennent le journal radio reel) -----------
+backups/
+*.bak
+
+# --- Journaux / fichiers de test temporaires ---------------------------
+.rfs_write_test
+*.log
+
+# --- Fichiers macOS ----------------------------------------------------
+.DS_Store
+._*
+.AppleDouble
+.Spotlight-V100
+.Trashes
+
+# --- Python / JS -------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+
+# --- Editeurs ----------------------------------------------------------
+.idea/
+.vscode/
+*.swp
+
+# --- Secrets : ne jamais publier ---------------------------------------
+.env
+.env.*
+*.pem
+*.key
+credentials*
+secrets*
+
+# --- Duplicates herites de la racine (les vrais fichiers sont ailleurs)
+# Sources : la verite est dans main/, pas a la racine
+/auth.h
+/display.h
+/mqtt.h
+/net.h
+/scanner.h
+/store.h
+/web.h
+/wigle.h
+/oled_font.h
+/oled_logo.h
+/lcd/
+
+# Notes de travail internes (journal de conception, exemples avec adresses
+# reelles) : la documentation publiee est README.md + DOCUMENTATION.md
+/notes/
+/01-analyse-wigle-api.md
+/02-conception.md
+/03-recherche-projets.md
+
+# Logos : la version de reference est dans logo/
+/rfsentinel-icon.svg
+/rfsentinel-logo.svg
+/rfsentinel-oled-icon.svg
+/rfsentinel-oled-wordmark.svg
+
+# --- Journal de travail interne (non publie) ---------------------------
+PROGRESS.md

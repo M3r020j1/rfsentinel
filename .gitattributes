@@ -1,0 +1,15 @@
+# Lignes de force LF dans le depot, meme sous Windows
+* text=auto eol=lf
+
+# Binaires et medias : jamais normalises
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.svg text eol=lf
+*.bin binary
+*.elf binary
+*.map binary
+
+# Documents
+*.md text eol=lf diff
+*.csv text eol=lf

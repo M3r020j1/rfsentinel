@@ -1,0 +1,5 @@
+## RFSentinel - dependances externes (composant gere, gestionnaire ESP-IDF)
+## LittleFS (joltwallet) : journalisation robuste aux coupures, remplace SPIFFS
+dependencies:
+  idf: ">=5.3"
+  "joltwallet/littlefs": "==1.23.1"

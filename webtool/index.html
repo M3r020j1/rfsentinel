@@ -1,0 +1,1093 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RFSentinel — Flasher le dongle depuis le navigateur</title>
+<meta name="description" content="Écriture du firmware RFSentinel dans une LilyGO T-Dongle-S3 depuis Google Chrome, sans installation.">
+<style>
+:root {
+  --bg:#0d1117; --panel:#161b22; --border:#30363d; --text:#e6edf3;
+  --muted:#8b949e; --accent:#58a6ff; --ok:#3fb950; --warn:#d29922;
+  --err:#f85149; --hover:#1f2733;
+}
+html[data-theme="light"] {
+  --bg:#f6f8fa; --panel:#ffffff; --border:#d0d7de; --text:#1f2328;
+  --muted:#656d76; --accent:#0969da; --ok:#1a7f37; --warn:#9a6700;
+  --err:#cf222e; --hover:#eaeef2;
+}
+* { box-sizing:border-box; }
+body { margin:0; background:var(--bg); color:var(--text); line-height:1.5;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif; font-size:14px; }
+header { display:flex; align-items:center; gap:14px; padding:12px 20px; background:var(--panel);
+  border-bottom:1px solid var(--border); position:sticky; top:0; z-index:5; }
+header .logo { width:36px; height:44px; flex:0 0 auto; }
+header .titre { font-size:17px; font-weight:700; letter-spacing:.3px; }
+header .sous { font-size:12px; color:var(--muted); }
+header .pousse { margin-left:auto; }
+main { max-width:980px; margin:0 auto; padding:20px; }
+select,input[type=text],input[type=file],input[type=password],button { background:var(--panel);
+  color:var(--text); border:1px solid var(--border); border-radius:6px; padding:8px 10px; font:inherit; }
+input[type=text] { min-width:0; width:100%; }
+button { cursor:pointer; background:var(--accent); color:#fff; border:none; font-weight:600; }
+button:hover:not(:disabled) { filter:brightness(1.08); }
+button:disabled { opacity:.45; cursor:not-allowed; }
+button.second { background:var(--panel); color:var(--text); border:1px solid var(--border); }
+button.danger { background:var(--err); }
+.intro { color:var(--muted); margin:0 0 16px; }
+.cartes { display:grid; gap:16px; }
+.carte { background:var(--panel); border:1px solid var(--border); border-radius:8px; padding:16px 18px; }
+.carte h2 { margin:0 0 6px; font-size:15px; color:var(--accent); }
+.carte .etape { font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:1.2px; }
+.carte.inactive { opacity:.5; }
+.ligne { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:8px 0; }
+.ligne label { color:var(--muted); }
+.radio { display:flex; gap:9px; align-items:flex-start; padding:7px 0; }
+.radio input { margin-top:3px; }
+.radio div span { display:block; color:var(--muted); font-size:13px; }
+.zone { border:1px dashed var(--border); border-radius:6px; padding:10px 12px; margin:6px 0 4px 24px; }
+table { width:100%; border-collapse:collapse; margin-top:10px; }
+th,td { text-align:left; padding:6px 8px; border-bottom:1px solid var(--border); font-size:13px; }
+th { color:var(--muted); font-weight:600; }
+td.mono,th.mono { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; }
+.pastille { display:inline-block; padding:1px 8px; border-radius:10px; font-size:12px;
+  border:1px solid var(--border); color:var(--muted); }
+.pastille.ok { color:var(--ok); border-color:var(--ok); }
+.pastille.non { color:var(--err); border-color:var(--err); }
+.pastille.att { color:var(--warn); border-color:var(--warn); }
+.grille { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:8px 16px; margin-top:10px; }
+.grille div span { display:block; color:var(--muted); font-size:12px; }
+.grille div b { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-weight:600; word-break:break-all; }
+.barre { height:10px; background:var(--hover); border:1px solid var(--border); border-radius:5px; overflow:hidden; }
+.barre i { display:block; height:100%; width:0; background:var(--accent); transition:width .15s; }
+.barre.finie i { background:var(--ok); }
+.fichier { margin:10px 0; }
+.fichier .entete { display:flex; justify-content:space-between; gap:10px; font-size:13px; color:var(--muted); }
+.alerte,.erreur,.note,.reussie { border-radius:6px; padding:10px 12px; margin:10px 0; }
+.alerte { border:1px solid var(--warn); background:rgba(210,153,34,.12); color:var(--warn); }
+.erreur { border:1px solid var(--err); background:rgba(248,81,73,.12); color:var(--err); }
+.note { border:1px solid var(--border); background:var(--hover); color:var(--muted); }
+.reussie { border:1px solid var(--ok); background:rgba(63,185,80,.12); color:var(--ok); }
+.note b,.alerte b,.erreur b,.reussie b { color:inherit; }
+#journal { background:#010409; color:#c9d1d9; border:1px solid var(--border); border-radius:6px;
+  padding:10px; height:210px; overflow:auto; font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12px; white-space:pre-wrap; word-break:break-word; }
+html[data-theme="light"] #journal { background:#010409; color:#c9d1d9; }
+#journal .serie { color:#7ee787; } #journal .pb { color:#f85149; }
+#journal .info { color:#8b949e; } #journal .ok { color:#3fb950; } #journal .avert { color:#d29922; }
+footer { max-width:980px; margin:0 auto; padding:4px 20px 30px; color:var(--muted); font-size:12px; }
+a { color:var(--accent); }
+code { font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:12.5px;
+  background:var(--hover); border-radius:4px; padding:1px 4px; }
+.reglages { display:flex; gap:14px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+.reglages label { color:var(--muted); display:flex; gap:6px; align-items:center; }
+@media (max-width:640px) { main { padding:14px; } header { padding:10px 14px; } .zone { margin-left:0; } }
+</style>
+</head>
+<body>
+
+<header>
+  <svg class="logo" viewBox="40 14 176 240" aria-hidden="true">
+    <defs>
+      <linearGradient id="bouclier" x1="42" y1="26" x2="214" y2="235" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#142C49"/><stop offset="1" stop-color="#091727"/>
+      </linearGradient>
+      <linearGradient id="balayage" x1="76" y1="173" x2="172" y2="72" gradientUnits="userSpaceOnUse">
+        <stop stop-color="#29D7E8" stop-opacity=".08"/><stop offset="1" stop-color="#29D7E8" stop-opacity=".48"/>
+      </linearGradient>
+      <clipPath id="dedans"><path d="M128 35 196 59v55c0 48-27 82-68 106-41-24-68-58-68-106V59l68-24Z"/></clipPath>
+    </defs>
+    <path d="M128 18 216 49v66c0 60-34 101-88 132-54-31-88-72-88-132V49l88-31Z" fill="url(#bouclier)"/>
+    <path d="M128 35 196 59v55c0 48-27 82-68 106-41-24-68-58-68-106V59l68-24Z" fill="none" stroke="#44D8E8" stroke-width="3" stroke-linejoin="round"/>
+    <g clip-path="url(#dedans)">
+      <circle cx="128" cy="126" r="67" fill="none" stroke="#4BCEDF" stroke-opacity=".25" stroke-width="2"/>
+      <circle cx="128" cy="126" r="43" fill="none" stroke="#4BCEDF" stroke-opacity=".35" stroke-width="2"/>
+      <path d="M62 126h132M128 58v136" stroke="#4BCEDF" stroke-opacity=".28" stroke-width="2"/>
+      <path d="M128 126 174 79a66 66 0 0 0-66-18Z" fill="url(#balayage)"/>
+      <path d="M128 126 174 79" stroke="#4DE0ED" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <circle cx="128" cy="126" r="8" fill="#F4B84A"/>
+    <circle cx="174" cy="79" r="6" fill="#F4B84A" stroke="#142C49" stroke-width="3"/>
+  </svg>
+  <div>
+    <div class="titre">RFSentinel <span style="color:var(--muted);font-weight:500">— Flasher le dongle</span></div>
+    <div class="sous">LilyGO T-Dongle-S3 · Google Chrome ou Microsoft Edge · aucune installation</div>
+  </div>
+  <div class="pousse"></div>
+  <button id="btn-theme" class="second" type="button" title="Basculer entre thème sombre et clair">Thème</button>
+</header>
+
+<main>
+  <p class="intro">Cette page écrit le firmware dans la mémoire flash du dongle depuis le navigateur.
+  Le moteur d'écriture est <a href="https://github.com/espressif/esptool-js" rel="noopener">esptool-js</a>,
+  la version navigateur d'esptool maintenue par Espressif. Les images ne transitent par aucun serveur
+  intermédiaire&nbsp;: elles viennent du dépôt ou de votre disque, et leur empreinte est vérifiée.</p>
+
+  <div id="avert-navigateur" class="erreur" hidden></div>
+  <div id="avert-materiel" class="alerte">
+    <b>Vérifiez le modèle de la carte.</b> RFSentinel écrit une table de partitions de 16&nbsp;Mo.
+    Une LilyGO T-Dongle-S3 de 8&nbsp;Mo — même boîtier, même apparence — ne démarrera plus après
+    l'écriture. La page lit la taille réelle de la mémoire avant d'écrire et refuse si elle n'est pas
+    de 16&nbsp;Mo.
+  </div>
+
+  <div id="avert-contexte" class="alerte" hidden></div>
+
+  <div class="cartes">
+    <section class="carte" id="c-source">
+      <div class="etape">Étape 1</div>
+      <h2>Choisir les images à écrire</h2>
+      <label class="radio"><input type="radio" name="source" id="src-depot" checked>
+        <div><b>Depuis le dépôt RFSentinel</b>
+        <span>Charge le manifeste, puis les trois images, et vérifie leur empreinte SHA-256.
+        Une connexion Internet est nécessaire.</span></div></label>
+      <div class="zone" id="zone-depot">
+        <div class="ligne"><label for="base">Manifeste</label>
+          <input type="text" id="base" spellcheck="false" autocomplete="off"></div>
+        <div class="ligne"><button id="btn-charge" type="button">Charger le manifeste</button>
+          <span id="etat-depot" style="color:var(--muted);font-size:13px"></span></div>
+      </div>
+
+      <label class="radio"><input type="radio" name="source" id="src-local">
+        <div><b>Depuis mes fichiers</b>
+        <span>Les trois fichiers <code>.bin</code> d'une release, ou d'une compilation personnelle,
+        choisis sur votre disque. Fonctionne entièrement hors ligne.</span></div></label>
+      <div class="zone" id="zone-local" hidden>
+        <div class="ligne"><label for="f-boot">bootloader.bin</label>
+          <input type="file" id="f-boot" accept=".bin,application/octet-stream"></div>
+        <div class="ligne"><label for="f-part">partition-table.bin</label>
+          <input type="file" id="f-part" accept=".bin,application/octet-stream"></div>
+        <div class="ligne"><label for="f-app">rfsentinel.bin</label>
+          <input type="file" id="f-app" accept=".bin,application/octet-stream"></div>
+        <div id="etat-local" class="alerte" hidden></div>
+      </div>
+
+      <div id="resume" hidden>
+        <table>
+          <thead><tr><th class="mono">Adresse</th><th>Image</th><th class="mono">Taille</th><th>Empreinte</th></tr></thead>
+          <tbody id="lignes-images"></tbody>
+        </table>
+        <div id="info-manifeste" class="note" hidden></div>
+      </div>
+    </section>
+
+    <section class="carte inactive" id="c-port">
+      <div class="etape">Étape 2</div>
+      <h2>Choisir le port du dongle</h2>
+      <p style="color:var(--muted);margin:6px 0 0">Brancher le dongle en USB-C, puis cliquer sur
+      «&nbsp;Choisir le port&nbsp;». Chrome liste les ports série accessibles&nbsp;; sélectionner
+      <code>USB JTAG/serial debug unit</code>. Si la liste est vide, maintenir le bouton
+      <b>BOOT</b> (trou du fond) tout en branchant le dongle, puis relâcher.</p>
+      <div class="ligne" style="margin-top:10px">
+        <button id="btn-port" type="button" disabled>Choisir le port</button>
+        <button id="btn-effacer" type="button" class="danger" disabled title="Efface toute la mémoire flash, journal compris">Effacer toute la flash</button>
+      </div>
+      <div class="reglages">
+        <label><input type="checkbox" id="opt-suivi"> Suivre la sortie série après l'écriture</label>
+        <label><input type="checkbox" id="opt-trace"> Traces du protocole (débogage)</label>
+      </div>
+      <div id="infos-puce" class="grille" hidden></div>
+      <div id="hint-port" class="note" hidden></div>
+      <div id="gate" class="erreur" hidden></div>
+    </section>
+
+    <section class="carte inactive" id="c-ecriture">
+      <div class="etape">Étape 3</div>
+      <h2>Écrire le firmware</h2>
+      <div class="note" style="margin-top:10px">Le plan d’écriture est imposé par la page :
+      puce <code>esp32s3</code>, flash <code>dio</code> / <code>80 MHz</code> / <code>16 MB</code>,
+      écritures à <code>0x0</code>, <code>0x8000</code> et <code>0x10000</code>.</div>
+      <label class="radio" style="padding-top:10px"><input type="checkbox" id="confirme">
+        <div><b>Je confirme que ce dongle possède bien une mémoire flash de 16&nbsp;Mo.</b>
+        <span>Les T-Dongle-S3 existent en 8 et en 16&nbsp;Mo. Une table de partitions de 16&nbsp;Mo
+        écrite sur une carte 8&nbsp;Mo empêche le démarrage.</span></div></label>
+      <label class="radio"><input type="checkbox" id="opt-effacer">
+        <div><b>Effacer toute la mémoire flash avant d’écrire</b>
+        <span>À réserver au premier usage, ou à une carte dont on veut effacer le journal
+        et la configuration Wi-Fi. L’écriture normale ne touche pas la partition
+        <code>storage</code>.</span></div></label>
+      <div class="ligne" style="margin-top:8px">
+        <button id="btn-flash" type="button" disabled>Écrire dans le dongle</button>
+        <span id="etat-general" style="color:var(--muted);font-size:13px"></span>
+      </div>
+      <div class="barre" id="barre-general"><i></i></div>
+      <div id="progressions"></div>
+      <div id="terminal" class="note" hidden style="padding:0"><div id="journal" role="log" aria-live="polite"></div></div>
+      <div id="resultat" hidden></div>
+    </section>
+
+    <section class="carte" id="c-apres">
+      <div class="etape">Après l'écriture</div>
+      <h2>Premier démarrage</h2>
+      <ol style="margin:6px 0 0;padding-left:20px;color:var(--muted)">
+        <li>Le dongle redémarre seul. L'écran affiche le logo RFSentinel puis la version.</li>
+        <li>Sans réseau configuré, il émet le point d'accès <b style="color:var(--text)">RFSentinel-Setup</b>
+        (mot de passe <code>012345678</code>).</li>
+        <li>S'y connecter, puis ouvrir <b style="color:var(--text)">http://192.168.4.1</b>.</li>
+        <li>Première connexion avec <code>admin</code> / <code>admin</code>&nbsp;: le changement de mot de
+        passe est imposé.</li>
+      </ol>
+      <div class="note">L'écriture du firmware ne touche pas à la partition <code>storage</code>&nbsp;:
+      le journal des observations est conservé. «&nbsp;Effacer toute la flash&nbsp;» le supprime, ainsi que
+      la configuration Wi-Fi.</div>
+    </section>
+  </div>
+</main>
+
+<footer>
+  Moteur <a href="https://github.com/espressif/esptool-js" rel="noopener">esptool-js 0.7.1</a>
+  (Apache-2.0, Espressif Systems), chargé localement depuis
+  <code>vendor/esptool-js/</code> — la page fonctionne sans serveur ni CDN.
+  Firmware RFSentinel sous licence CC BY-NC-SA 4.0.
+</footer>
+
+<script src="vendor/esptool-js/bundle.global.js"></script>
+<script>
+/* ===================================================================
+   Flasher RFSentinel — logique de la page.
+   Script classique (pas de module ES) pour fonctionner depuis file://.
+   Le moteur d'écriture est esptool-js, chargé par le script vendor.
+   Les fonctions pures (md5, manifeste, contrôle de cohérence, progression)
+   sont extraites et testées par tests/test_webtool_ui.js.
+   =================================================================== */
+"use strict";
+
+/* Dépôt où chercher le manifeste quand la page n'est pas servie par HTTP. */
+var DEPOT = "M3r020j1/rfsentinel";
+var BRANCHE = "main";
+
+/* Adresses et paramètres imposés : ils viennent de build/flasher_args.json
+   et de la table de partitions. Aucun de ces réglages ne vient du manifeste :
+   une table de 16 Mo écrite sur une carte de 8 Mo brique l'appareil. */
+var PLAN_IMPOSE = {
+  chip: "ESP32-S3",
+  flashMode: "dio",
+  flashFreq: "80m",
+  flashSize: "16MB",
+  images: [
+    { address: 0x0,     cle: "bootloader",       fichier: "bootloader.bin" },
+    { address: 0x8000,  cle: "partition-table",  fichier: "partition-table.bin" },
+    { address: 0x10000, cle: "app",              fichier: "rfsentinel.bin" }
+  ]
+};
+
+var BAUD_FLASH = 921600;
+var BAUD_DEBUT = 115200;
+
+/* ------------------------------------------------------------------ */
+/* Petits outils                                                       */
+/* ------------------------------------------------------------------ */
+
+function el(id) { return document.getElementById(id); }
+
+function octets(n) {
+  if (typeof n !== "number" || !isFinite(n) || n < 0) return "?";
+  if (n < 1024) return n + " o";
+  if (n < 1048576) return (n / 1024).toFixed(1) + " Ko";
+  return (n / 1048576).toFixed(2) + " Mo";
+}
+
+function hexadecale(n) {
+  return "0x" + n.toString(16).toUpperCase();
+}
+
+function espace(texte) {
+  return String(texte).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function dormir(duree) {
+  return new Promise(function (resolve) { setTimeout(resolve, duree); });
+}
+
+function versHex(tab) {
+  var s = "";
+  for (var i = 0; i < tab.length; i++) {
+    s += (tab[i] < 16 ? "0" : "") + tab[i].toString(16);
+  }
+  return s;
+}
+
+/* ------------------------------------------------------------------ */
+/* MD5 : la bibliothèque esptool-js laisse le calcul à l'appelant.     */
+/* Implémentation RFC 1321 sur Uint8Array, sans dépendance.            */
+/* ------------------------------------------------------------------ */
+
+function md5(donnees) {
+  var K = [
+    0xd76aa478, 0xe8c7b756, 0x242070db, 0xc1bdceee, 0xf57c0faf, 0x4787c62a,
+    0xa8304613, 0xfd469501, 0x698098d8, 0x8b44f7af, 0xffff5bb1, 0x895cd7be,
+    0x6b901122, 0xfd987193, 0xa679438e, 0x49b40821, 0xf61e2562, 0xc040b340,
+    0x265e5a51, 0xe9b6c7aa, 0xd62f105d, 0x02441453, 0xd8a1e681, 0xe7d3fbc8,
+    0x21e1cde6, 0xc33707d6, 0xf4d50d87, 0x455a14ed, 0xa9e3e905, 0xfcefa3f8,
+    0x676f02d9, 0x8d2a4c8a, 0xfffa3942, 0x8771f681, 0x6d9d6122, 0xfde5380c,
+    0xa4beea44, 0x4bdecfa9, 0xf6bb4b60, 0xbebfbc70, 0x289b7ec6, 0xeaa127fa,
+    0xd4ef3085, 0x04881d05, 0xd9d4d039, 0xe6db99e5, 0x1fa27cf8, 0xc4ac5665,
+    0xf4292244, 0x432aff97, 0xab9423a7, 0xfc93a039, 0x655b59c3, 0x8f0ccc92,
+    0xffeff47d, 0x85845dd1, 0x6fa87e4f, 0xfe2ce6e0, 0xa3014314, 0x4e0811a1,
+    0xf7537e82, 0xbd3af235, 0x2ad7d2bb, 0xeb86d391
+  ];
+  var DECALAGES = [
+    7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22, 7, 12, 17, 22,
+    5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20, 5, 9, 14, 20,
+    4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23, 4, 11, 16, 23,
+    6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21, 6, 10, 15, 21
+  ];
+  var longueur = donnees.length;
+  var avecFin = ((longueur + 8) >> 6) + 1;
+  var mots = new Uint32Array(avecFin * 16);
+  var i;
+  for (i = 0; i < longueur; i++) mots[i >> 2] |= donnees[i] << ((i % 4) * 8);
+  mots[longueur >> 2] |= 0x80 << ((longueur % 4) * 8);
+  var bitsBas = longueur * 8;
+  var bitsHaut = Math.floor(longueur / 536870912);
+  mots[avecFin * 16 - 2] = bitsBas >>> 0;
+  mots[avecFin * 16 - 1] = bitsHaut >>> 0;
+
+  function rotation(v, d) { return (v << d) | (v >>> (32 - d)); }
+
+  var a = 1732584193, b = 4023233417, c = 2562383102, d = 271733878;
+  for (var bloc = 0; bloc < mots.length; bloc += 16) {
+    var ancienA = a, ancienB = b, ancienC = c, ancienD = d;
+    for (i = 0; i < 64; i++) {
+      var f, g;
+      if (i < 16) { f = (b & c) | (~b & d); g = i; }
+      else if (i < 32) { f = (d & b) | (~d & c); g = (5 * i + 1) % 16; }
+      else if (i < 48) { f = b ^ c ^ d; g = (3 * i + 5) % 16; }
+      else { f = c ^ (b | ~d); g = (7 * i) % 16; }
+      var somme = (a + f + K[i] + mots[bloc + g]) >>> 0;
+      a = d; d = c; c = b;
+      b = (b + rotation(somme, DECALAGES[i])) >>> 0;
+    }
+    a = (a + ancienA) >>> 0; b = (b + ancienB) >>> 0;
+    c = (c + ancienC) >>> 0; d = (d + ancienD) >>> 0;
+  }
+  var sortie = new Uint8Array(16);
+  var mot = [a, b, c, d];
+  for (i = 0; i < 4; i++) {
+    sortie[i * 4] = mot[i] & 255;
+    sortie[i * 4 + 1] = (mot[i] >>> 8) & 255;
+    sortie[i * 4 + 2] = (mot[i] >>> 16) & 255;
+    sortie[i * 4 + 3] = (mot[i] >>> 24) & 255;
+  }
+  return versHex(sortie);
+}
+
+/* ------------------------------------------------------------------ */
+/* Manifeste et plan d'écriture                                        */
+/* ------------------------------------------------------------------ */
+
+/* Le manifeste décrit le firmware. Il ne peut pas changer les adresses ni
+   les paramètres mémoire : le plan imposé est la seule source de vérité. */
+function lireManifeste(brut) {
+  var m;
+  try { m = (typeof brut === "string") ? JSON.parse(brut) : brut; }
+  catch (e) { throw new Error("manifeste illisible : JSON invalide"); }
+  if (!m || typeof m !== "object") throw new Error("manifeste illisible : objet attendu");
+  if (String(m.chipFamily || "").toUpperCase().replace(/[^A-Z0-9]/g, "") !==
+      PLAN_IMPOSE.chip.toUpperCase().replace(/[^A-Z0-9]/g, "")) {
+    throw new Error("manifeste pour une autre puce (" + (m.chipFamily || "inconnue") +
+      ") : ce flasher écrit uniquement sur ESP32-S3");
+  }
+  var urls = {};
+  var sha = {};
+  var taille = {};
+  var parties = Array.isArray(m.parts) ? m.parts : [];
+  if (!parties.length) throw new Error("manifeste sans liste d'images");
+  for (var i = 0; i < parties.length; i++) {
+    var p = parties[i] || {};
+    var nom = String(p.fichier || p.path || "").split("/").pop();
+    if (!nom) continue;
+    var lien = p.url || p.path || nom;
+    urls[nom] = lien;
+    if (p.name) urls[String(p.name)] = lien;
+    if (p.id) urls[String(p.id)] = lien;
+    if (p.sha256) sha[nom] = String(p.sha256).toLowerCase();
+    if (typeof p.taille === "number") taille[nom] = p.taille;
+    if (typeof p.size === "number") taille[nom] = p.size;
+  }
+  return {
+    nom: String(m.name || "RFSentinel"),
+    version: String(m.version || "inconnue"),
+    urls: urls, sha: sha, taille: taille,
+    urlManifeste: String(m._url || "")
+  };
+}
+
+/* Construit la liste des images à écrire, avec leur URL absolue.
+   Retourne une liste de {address, cle, fichier, url, sha256, taille}. */
+function planDepuisManifeste(manifeste, urlDeBase) {
+  var base = "";
+  if (urlDeBase) {
+    var i = urlDeBase.lastIndexOf("/");
+    base = i >= 0 ? urlDeBase.slice(0, i + 1) : "";
+  }
+  var plan = [];
+  for (var n = 0; n < PLAN_IMPOSE.images.length; n++) {
+    var modele = PLAN_IMPOSE.images[n];
+    var relatif = manifeste.urls[modele.cle] ||
+      manifeste.urls[modele.fichier] || modele.fichier;
+    var url = /^https?:/i.test(relatif) ? relatif : base + relatif;
+    plan.push({
+      address: modele.address, cle: modele.cle, fichier: modele.fichier,
+      url: url, sha256: manifeste.sha[modele.fichier] || "",
+      taille: manifeste.taille[modele.fichier] || 0
+    });
+  }
+  return plan;
+}
+
+/* Le contrôle d'empreinte est optionnel seulement si le manifeste n'en
+   fournit pas : on le signale, on n'empêche pas l'écriture. */
+function empreinteAttendue(plan) {
+  var manquantes = [];
+  for (var i = 0; i < plan.length; i++) if (!plan[i].sha256) manquantes.push(plan[i].fichier);
+  return manquantes;
+}
+
+/* SHA-256 par WebCrypto, avec repli sur l'empreinte MD5 calculée par
+   esptool-js après écriture si l'API est indisponible (contexte non sécurisé). */
+async function sha256(donnees) {
+  if (!(globalThis.crypto && crypto.subtle && crypto.subtle.digest)) return "";
+  var buffer = await crypto.subtle.digest("SHA-256", donnees.buffer.slice(0));
+  return versHex(new Uint8Array(buffer));
+}
+
+/* ------------------------------------------------------------------ */
+/* Contrôle pré-écriture : la seule barrière contre une carte 8 Mo     */
+/* ------------------------------------------------------------------ */
+
+/* Deux niveaux : un refus net (puce étrangère, mémoire trop petite) et un
+   simple avertissement (mémoire non lue). Le refus ne se contourne pas. */
+function controlerPuce(puceDetectee, tailleDetectee) {
+  var puce = String(puceDetectee || "").toUpperCase();
+  var motifs = [];
+  var avertissements = [];
+  if (puce.indexOf("S3") < 0) {
+    motifs.push("puce détectée : " + (puceDetectee || "inconnue") +
+      " — ce firmware est compilé pour ESP32-S3");
+  }
+  var taille = String(tailleDetectee || "");
+  var octetsDetectes = 0;
+  var mesure = /^([0-9]+)\s*MB$/i.exec(taille);
+  if (mesure) octetsDetectes = parseInt(mesure[1], 10) * 1048576;
+  if (!taille) {
+    avertissements.push("taille de la mémoire flash non lue : vérifiez vous-même " +
+      "que la carte est bien en 16 Mo");
+  } else if (octetsDetectes < 16 * 1048576) {
+    motifs.push("mémoire flash détectée : " + taille +
+      " — la table de partitions demande 16 MB, la carte ne démarrera pas");
+  } else if (octetsDetectes > 16 * 1048576) {
+    avertissements.push("mémoire de " + taille + " détectée : la table de partitions " +
+      "n'en utilisera que 16 MB");
+  }
+  return { bloque: motifs.length > 0, motifs: motifs,
+    avertissements: avertissements, tailleOctets: octetsDetectes };
+}
+
+/* Progression : esptool-js rapporte des octets COMPRESSÉS quand compress
+   est actif. On ramène à la taille réelle de l'image, puis à l'ensemble. */
+function progression(images, indexCourant, ecrit, total) {
+  var totalReel = 0;
+  var dejaFait = 0;
+  var i;
+  for (i = 0; i < images.length; i++) totalReel += images[i].taille;
+  if (totalReel <= 0) return { part: 0, image: 0, total: 0 };
+  for (i = 0; i < indexCourant; i++) dejaFait += images[i].taille;
+  var partImage = 0;
+  if (total > 0) partImage = Math.min(1, Math.max(0, ecrit / total));
+  var dansImage = images[indexCourant] ? images[indexCourant].taille * partImage : 0;
+  return {
+    part: partImage,
+    image: dansImage,
+    total: (dejaFait + dansImage) / totalReel
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Interface                                                           */
+/* ------------------------------------------------------------------ */
+
+var etat = {
+  sources: { depot: imagesVides(), local: imagesVides() },
+  port: null,
+  esp: null,
+  transport: null,
+  occupE: false,
+  controle: null,
+  puceVue: false,   /* une puce a déjà été détectée dans cette session */
+  brut: null        /* console série */
+};
+
+/* Chaque source de images garde son propre contenu : passer du dépôt aux
+   fichiers, ou l'inverse, ne peut plus effacer le choix fait sur l'autre. */
+function imagesVides() { return { manifeste: null, plan: [], images: [] }; }
+function etatActif() { return etat.sources[sourceChoisie()]; }
+
+function theme() {
+  var racine = document.documentElement;
+  return racine.getAttribute("data-theme") === "light" ? "light" : "dark";
+}
+
+function basculerTheme() {
+  var racine = document.documentElement;
+  racine.setAttribute("data-theme", theme() === "dark" ? "light" : "dark");
+  try { localStorage.setItem("rfs-theme", theme()); } catch (e) { /* hors ligne */ }
+}
+
+function journaliser(message, classe) {
+  var zone = el("journal");
+  if (!zone) return;
+  var ligne = document.createElement("div");
+  ligne.className = classe || "info";
+  ligne.textContent = message;
+  zone.appendChild(ligne);
+  zone.scrollTop = zone.scrollHeight;
+  el("terminal").hidden = false;
+}
+
+function viderJournal() { el("journal").textContent = ""; el("terminal").hidden = false; }
+
+function etape(numero, actif) {
+  var carte = el("c-" + numero);
+  if (carte) carte.classList.toggle("inactive", !actif);
+}
+
+function signaler(id, message, classe) {
+  var bloc = el(id);
+  if (!bloc) return;
+  bloc.className = classe || "note";
+  bloc.innerHTML = message;
+  bloc.hidden = !message;
+}
+
+/* ------------------------------------------------------------------ */
+/* Chargement du firmware                                              */
+/* ------------------------------------------------------------------ */
+
+/* URL du manifeste proposée par défaut : celle du dépôt si la page est
+   ouverte en local, sinon le dossier firmware placé à côté de la page. */
+function urlParDefaut() {
+  if (location.protocol === "http:" || location.protocol === "https:") {
+    return new URL("firmware/manifest.json", location.href).href;
+  }
+  return "https://raw.githubusercontent.com/" + DEPOT + "/" + BRANCHE +
+    "/webtool/firmware/manifest.json";
+}
+
+function sourceChoisie() { return el("src-depot").checked ? "depot" : "local"; }
+
+function afficherZones() {
+  var depot = sourceChoisie() === "depot";
+  el("zone-depot").hidden = !depot;
+  el("zone-local").hidden = depot;
+  afficherPlan();
+  majBoutons();
+}
+
+function afficherPlan() {
+  var src = etatActif();
+  if (src.plan.length !== 3) {
+    el("resume").hidden = true;
+    signaler("info-manifeste", "", "note");
+    return;
+  }
+  var lignes = "";
+  for (var i = 0; i < src.plan.length; i++) {
+    var p = src.plan[i];
+    var empreinte = p.sha256 ? "SHA-256 " + p.sha256.slice(0, 12) + "…" : "absente";
+    lignes += "<tr><td class=mono>" + hexadecale(p.address) + "</td><td>" + espace(p.fichier) +
+      "</td><td class=mono>" + (p.taille ? octets(p.taille) : "—") + "</td><td>" +
+      espace(empreinte) + "</td></tr>";
+  }
+  el("lignes-images").innerHTML = lignes;
+  el("resume").hidden = false;
+  var info = "<b>" + espace(src.manifeste.nom) + " " + espace(src.manifeste.version) +
+    "</b> — puce " + espace(PLAN_IMPOSE.chip) + ", flash " + PLAN_IMPOSE.flashMode +
+    "/" + PLAN_IMPOSE.flashFreq + "/" + PLAN_IMPOSE.flashSize +
+    ". Écritures à " + src.plan.map(function (x) { return hexadecale(x.address); }).join(", ") + ".";
+  if (src.manifeste.local) {
+    info += " Images choisies sur votre disque : aucune empreinte publiée n'est disponible " +
+      "pour les comparer. esptool vérifiera néanmoins l'empreinte MD5 lue dans la flash " +
+      "après écriture.";
+  } else {
+    var manquantes = empreinteAttendue(src.plan);
+    if (manquantes.length) {
+      info += " Le manifeste ne fournit pas l'empreinte de " + manquantes.join(", ") +
+        " : la vérification SHA-256 ne pourra pas être faite.";
+    }
+  }
+  signaler("info-manifeste", info, "note");
+}
+
+async function chargerManifeste() {
+  var url = el("base").value.trim();
+  if (!url) { signaler("etat-depot", "Indiquer une adresse de manifeste.", "alerte"); return; }
+  el("btn-charge").disabled = true;
+  el("etat-depot").textContent = "chargement…";
+  try {
+    var reponse = await fetch(url, { cache: "no-store" });
+    if (!reponse.ok) throw new Error("le serveur a répondu " + reponse.status);
+    var brut = await reponse.json();
+    brut._url = reponse.url || url;
+    var depot = etat.sources.depot;
+    depot.manifeste = lireManifeste(brut);
+    depot.plan = planDepuisManifeste(depot.manifeste, brut._url);
+    depot.images = [];
+    if (sourceChoisie() === "depot") afficherPlan();
+    el("etat-depot").textContent = "manifeste " + depot.manifeste.version + " chargé";
+    majBoutons();
+  } catch (e) {
+    etat.sources.depot = imagesVides();
+    if (sourceChoisie() === "depot") afficherPlan();
+    el("etat-depot").textContent = "";
+    signaler("etat-depot", "Impossible de charger le manifeste : " + espace(e.message) +
+      ".<br>Vérifiez l'adresse, ou choisissez «&nbsp;Depuis mes fichiers&nbsp;».", "alerte");
+  } finally {
+    el("btn-charge").disabled = false;
+  }
+}
+
+/* Mode fichier : les trois binaires doivent être présents. */
+async function lireFichier(input) {
+  if (!input.files || !input.files[0]) return null;
+  var fichier = input.files[0];
+  var donnees = new Uint8Array(await fichier.arrayBuffer());
+  return { fichier: fichier.name, data: donnees, taille: donnees.length };
+}
+
+async function lireFichiersChoisis() {
+  var trio = [
+    { entree: el("f-boot"), modele: PLAN_IMPOSE.images[0] },
+    { entree: el("f-part"), modele: PLAN_IMPOSE.images[1] },
+    { entree: el("f-app"), modele: PLAN_IMPOSE.images[2] }
+  ];
+  var images = [];
+  var plan = [];
+  var manquants = [];
+  for (var i = 0; i < trio.length; i++) {
+    var lu = await lireFichier(trio[i].entree);
+    if (!lu) { manquants.push(trio[i].modele.fichier); continue; }
+    images.push({ address: trio[i].modele.address, fichier: trio[i].modele.fichier,
+      data: lu.data, taille: lu.taille });
+    plan.push({ address: trio[i].modele.address, cle: trio[i].modele.cle,
+      fichier: trio[i].modele.fichier, url: "", sha256: "", taille: lu.taille });
+  }
+  if (manquants.length) {
+    etat.sources.local = imagesVides();
+    if (manquants.length < 3) {
+      signaler("etat-local", "Il manque " + manquants.join(", ") +
+        ". Les trois images sont indispensables.", "alerte");
+    } else {
+      signaler("etat-local", "", "note");
+    }
+    afficherPlan();
+    majBoutons();
+    return;
+  }
+  signaler("etat-local", "", "note");
+  etat.sources.local = {
+    images: images,
+    plan: plan,
+    manifeste: { nom: "RFSentinel", version: "fichiers locaux", local: true,
+      urls: {}, sha: {}, taille: {} }
+  };
+  afficherPlan();
+  majBoutons();
+}
+
+/* Les images sont-elles prêtes à être écrites ? */
+function imagesPretes() {
+  var src = etatActif();
+  if (sourceChoisie() === "local") return src.images.length === 3;
+  return !!src.manifeste && src.plan.length === 3;
+}
+
+/* ------------------------------------------------------------------ */
+/* Port série et détection de la puce                                  */
+/* ------------------------------------------------------------------ */
+
+function terminalSilencieux() {
+  return {
+    clean: function () {},
+    writeLine: function (donnee) { journaliser(donnee, "info"); },
+    write: function (donnee) { journaliser(donnee, "info"); }
+  };
+}
+
+async function choisirPort() {
+  if (!navigator.serial) return;
+  try {
+    etat.port = await navigator.serial.requestPort();
+  } catch (e) {
+    journaliser("Sélection annulée : " + e.message, "avert");
+    return;
+  }
+  await detecter();
+}
+
+async function detecter() {
+  if (!etat.port) return;
+  var module = globalThis.esptooljs;
+  etat.occupE = true;
+  majBoutons();
+  viderJournal();
+  el("gate").hidden = true;
+  el("infos-puce").hidden = true;
+  try {
+    etat.transport = new module.Transport(etat.port, el("opt-trace").checked);
+    etat.esp = new module.ESPLoader({
+      transport: etat.transport,
+      baudrate: BAUD_FLASH,
+      romBaudrate: BAUD_DEBUT,
+      terminal: terminalSilencieux()
+    });
+    await etat.esp.main("default_reset");
+    var nom = etat.esp.chip.CHIP_NAME;
+    var description = etat.esp.secureDownloadMode ? nom : await etat.esp.chip.getChipDescription(etat.esp);
+    var mac = "";
+    var caracteristiques = "";
+    if (!etat.esp.secureDownloadMode) {
+      mac = await etat.esp.chip.readMac(etat.esp);
+      caracteristiques = (await etat.esp.chip.getChipFeatures(etat.esp)).join(", ");
+    }
+    var taille = await etat.esp.detectFlashSize();
+    etat.tailleFlash = taille || "";
+    var infos = [
+      ["Puce", description || nom],
+      ["Mémoire flash", taille || "non lue"],
+      ["Adresse MAC", mac || "—"],
+      ["Options", caracteristiques || "—"]
+    ];
+    var html = "";
+    for (var i = 0; i < infos.length; i++) {
+      html += "<div><span>" + espace(infos[i][0]) + "</span><b>" + espace(infos[i][1]) + "</b></div>";
+    }
+    el("infos-puce").innerHTML = html;
+    el("infos-puce").hidden = false;
+
+    var controle = controlerPuce(nom + " " + description, taille);
+    etat.controle = controle;
+    if (controle.bloque) {
+      signaler("gate", "<b>Écriture refusée.</b><br>" + controle.motifs.map(espace).join("<br>"), "erreur");
+    } else if (controle.avertissements.length) {
+      signaler("gate", "<b>À vérifier avant d'écrire.</b><br>" +
+        controle.avertissements.map(espace).join("<br>") +
+        "<br>Confirmez la taille de la carte à l'étape 3.", "alerte");
+    } else {
+      signaler("gate", "<b>Carte conforme.</b> Puce ESP32-S3, mémoire de 16 MB : " +
+        "le firmware peut être écrit.", "reussie");
+    }
+    etape("ecriture", true);
+  } catch (e) {
+    signaler("gate", "<b>Connexion impossible.</b> " + espace(e.message) +
+      "<br>Le port doit être libre (fermer le moniteur série, idf.py monitor, Arduino IDE). " +
+      "Si le dongle n'apparaît pas, maintenir BOOT en le branchant.", "erreur");
+    etat.controle = { bloque: true, motifs: [String(e.message)] };
+    await deconnecter();
+  } finally {
+    etat.occupE = false;
+    majBoutons();
+  }
+}
+
+async function deconnecter() {
+  if (etat.transport) {
+    try { await etat.transport.disconnect(); } catch (e) { /* déjà fermé */ }
+  }
+  etat.esp = null;
+  etat.transport = null;
+}
+
+/* ------------------------------------------------------------------ */
+/* Téléchargement des images du dépôt                                  */
+/* ------------------------------------------------------------------ */
+
+async function telechargerImages() {
+  var images = [];
+  var plan = etat.sources.depot.plan;
+  for (var i = 0; i < plan.length; i++) {
+    var p = plan[i];
+    journaliser("Téléchargement de " + p.fichier + " …", "info");
+    var reponse = await fetch(p.url, { cache: "no-store" });
+    if (!reponse.ok) throw new Error(p.fichier + " : le serveur a répondu " + reponse.status + " pour " + p.url);
+    var donnees = new Uint8Array(await reponse.arrayBuffer());
+    if (p.taille && donnees.length !== p.taille) {
+      throw new Error(p.fichier + " : " + donnees.length + " octets reçus, " + p.taille + " annoncés");
+    }
+    if (p.sha256) {
+      var empreinte = await sha256(donnees);
+      if (empreinte && empreinte !== p.sha256.toLowerCase()) {
+        throw new Error(p.fichier + " : empreinte SHA-256 différente de celle du manifeste");
+      }
+      journaliser(p.fichier + " : empreinte vérifiée", "ok");
+    }
+    images.push({ address: p.address, fichier: p.fichier, data: donnees, taille: donnees.length });
+  }
+  return images;
+}
+
+/* ------------------------------------------------------------------ */
+/* Barres de progression                                               */
+/* ------------------------------------------------------------------ */
+
+function preparerProgression() {
+  var html = "";
+  for (var i = 0; i < 3; i++) {
+    html += "<div class=fichier><div class=entete><span id=lib" + i + ">—</span>" +
+      "<span id=pct" + i + "></span></div>" +
+      "<div class=barre id=bar" + i + "><i></i></div></div>";
+  }
+  el("progressions").innerHTML = html;
+  el("barre-general").classList.remove("finie");
+  el("barre-general").firstElementChild.style.width = "0";
+  el("etat-general").textContent = "";
+}
+
+function avancementGeneral(fraction) {
+  var pourcent = Math.max(0, Math.min(1, fraction)) * 100;
+  el("barre-general").firstElementChild.style.width = pourcent.toFixed(1) + "%";
+  el("etat-general").textContent = pourcent.toFixed(0) + " %";
+}
+
+function avancementImage(index, fraction, ecrit, total) {
+  var barre = el("bar" + index);
+  if (!barre) return;
+  barre.firstElementChild.style.width = (Math.max(0, Math.min(1, fraction)) * 100).toFixed(1) + "%";
+  el("pct" + index).textContent = octets(ecrit) + " / " + octets(total);
+}
+
+/* ------------------------------------------------------------------ */
+/* Écriture                                                            */
+/* ------------------------------------------------------------------ */
+
+async function obtenirImages() {
+  if (sourceChoisie() === "local") {
+    if (etat.sources.local.images.length !== 3) await lireFichiersChoisis();
+    return etat.sources.local.images;
+  }
+  return await telechargerImages();
+}
+
+async function ecrire() {
+  var module = globalThis.esptooljs;
+  if (!etat.esp) { await detecter(); }
+  if (!etat.esp) { signaler("resultat", "Aucune puce détectée.", "alerte"); el("resultat").hidden = false; return; }
+  if (etat.controle && etat.controle.bloque) {
+    signaler("resultat", "Écriture bloquée par le contrôle de cohérence.", "erreur");
+    el("resultat").hidden = false;
+    return;
+  }
+  if (!el("confirme").checked) {
+    signaler("resultat", "Cochez la confirmation que la carte est bien une 16 Mo.", "alerte");
+    el("resultat").hidden = false;
+    return;
+  }
+
+  etat.occupE = true;
+  majBoutons();
+  preparerProgression();
+  viderJournal();
+  el("resultat").hidden = true;
+
+  var effacer = el("opt-effacer").checked;
+  var src = etatActif();
+  var images = src.images;
+  try {
+    if (sourceChoisie() === "depot" && !images.length) {
+      journaliser("Récupération des images annoncées par le manifeste…", "info");
+      images = await obtenirImages();
+      src.images = images;
+    }
+    var fichierParAdresse = {};
+    for (var i = 0; i < src.plan.length; i++) fichierParAdresse[src.plan[i].address] = src.plan[i].fichier;
+
+    var fileArray = [];
+    for (i = 0; i < images.length; i++) {
+      fileArray.push({ data: images[i].data, address: images[i].address });
+      el("lib" + i).textContent = fichierParAdresse[images[i].address] + " à " +
+        hexadecale(images[i].address);
+      el("pct" + i).textContent = octets(images[i].taille);
+    }
+
+    if (effacer) {
+      journaliser("Effacement de toute la mémoire flash…", "avert");
+      await etat.esp.eraseFlash();
+      journaliser("Mémoire effacée.", "ok");
+    }
+
+    await etat.esp.writeFlash({
+      fileArray: fileArray,
+      flashMode: PLAN_IMPOSE.flashMode,
+      flashFreq: PLAN_IMPOSE.flashFreq,
+      flashSize: PLAN_IMPOSE.flashSize,
+      eraseAll: false,
+      compress: true,
+      reportProgress: function (index, ecrit, total) {
+        var etatImage = progression(images, index, ecrit, total);
+        avancementImage(index, etatImage.part, ecrit, total);
+        avancementGeneral(etatImage.total);
+      },
+      calculateMD5Hash: function (image) { return md5(image); }
+    });
+
+    avancementGeneral(1);
+    el("barre-general").classList.add("finie");
+    for (i = 0; i < images.length; i++) {
+      var barre = el("bar" + i);
+      if (barre) { barre.classList.add("finie"); barre.firstElementChild.style.width = "100%"; }
+    }
+
+    journaliser("Réinitialisation…", "info");
+    await etat.esp.after("hard_reset");
+    await deconnecter();
+
+    signaler("resultat", "<b>Écriture terminée et vérifiée.</b> Le dongle redémarre sur " +
+      "RFSentinel " + espace(src.manifeste ? src.manifeste.version : "") + ". " +
+      (effacer ? "Toute la mémoire avait été effacée : la configuration et le journal sont perdus."
+               : "La partition storage n'a pas été touchée : le journal est conservé."),
+      "reussie");
+    el("resultat").hidden = false;
+    etape("apres", true);
+    if (el("opt-suivi").checked) surveillerConsole();
+  } catch (e) {
+    var message = String(e && e.message ? e.message : e);
+    journaliser("Échec : " + message, "pb");
+    signaler("resultat", "<b>Écriture interrompue.</b> " + espace(message) +
+      "<br>Le dongle peut ne plus démarrer : relancez l'écriture, ou maintenez BOOT " +
+      "en le branchant pour le remettre en mode flash.", "erreur");
+    el("resultat").hidden = false;
+    await deconnecter();
+  } finally {
+    etat.occupE = false;
+    majBoutons();
+  }
+}
+
+async function effacerFlash() {
+  if (!etat.esp) { await detecter(); }
+  if (!etat.esp) return;
+  if (!window.confirm("Effacer TOUTE la mémoire flash ? Le journal des observations et la " +
+      "configuration Wi-Fi seront supprimés. Le firmware devra être réécrit.")) return;
+  etat.occupE = true;
+  majBoutons();
+  viderJournal();
+  try {
+    await etat.esp.eraseFlash();
+    journaliser("Mémoire effacée. Le dongle est vide : réécrivez le firmware.", "ok");
+    signaler("resultat", "<b>Mémoire effacée.</b> Réécrivez les trois images pour que le " +
+      "dongle redémarre.", "alerte");
+    el("resultat").hidden = false;
+    await deconnecter();
+  } catch (e) {
+    journaliser("Effacement impossible : " + e.message, "pb");
+  } finally {
+    etat.occupE = false;
+    majBoutons();
+  }
+}
+
+/* Sortie série après redémarrage : la console USB-Serial-JTAG porte les
+   traces de démarrage. Le port peut disparaître à la renumérotation ; ce
+   n'est pas grave, l'écriture est déjà terminée. */
+async function surveillerConsole() {
+  if (!etat.port || !etat.port.readable) return;
+  try {
+    await etat.port.open({ baudRate: 115200 });
+  } catch (e) {
+    journaliser("Suivi série indisponible : " + e.message, "avert");
+    return;
+  }
+  var transport = new globalThis.esptooljs.Transport(etat.port, false);
+  var arret = false;
+  var tampon = "";
+  journaliser("— sortie série du dongle —", "info");
+  var lecture = transport.rawRead(function (donnees) {
+    tampon += new TextDecoder("utf-8", { fatal: false }).decode(donnees);
+    var lignes = tampon.split(String.fromCharCode(10));
+    tampon = lignes.pop();
+    for (var i = 0; i < lignes.length; i++) {
+      if (lignes[i].trim()) journaliser(lignes[i], "serie");
+    }
+  }, function () { return arret; });
+  await dormir(8000);
+  arret = true;
+  try { await lecture; } catch (e) { /* port fermé */ }
+  try { await etat.port.close(); } catch (e) { /* déjà fermé */ }
+}
+
+/* ------------------------------------------------------------------ */
+/* Boutons                                                             */
+/* ------------------------------------------------------------------ */
+
+function majBoutons() {
+  var pret = imagesPretes();
+  el("btn-port").disabled = etat.occupE || !pret;
+  var puce = !!etat.esp && !etat.occupE;
+  if (etat.esp) etat.puceVue = true;
+  el("btn-flash").disabled = !(puce && etat.controle && !etat.controle.bloque);
+  el("btn-effacer").disabled = !puce;
+  etape("port", pret);
+  /* La carte gardee ouverte une fois la puce connue : apres l'ecriture la
+     connexion se ferme, et le message de succes s'affiche justement dessus. */
+  etape("ecriture", puce || etat.puceVue);
+  if (pret || etat.occupE) {
+    signaler("hint-port", "", "note");
+  } else if (sourceChoisie() === "depot") {
+    signaler("hint-port", "Le port reste verrouillé tant que le manifeste n'est pas chargé : " +
+      "cliquez sur <b>Charger le manifeste</b> à l'étape 1.", "note");
+  } else {
+    signaler("hint-port", "Le port reste verrouillé tant que les trois fichiers <code>.bin</code> " +
+      "ne sont pas choisis à l'étape 1.", "note");
+  }
+}
+
+function demarrer() {
+  try {
+    var sauvegarde = localStorage.getItem("rfs-theme");
+    if (sauvegarde) document.documentElement.setAttribute("data-theme", sauvegarde);
+  } catch (e) { /* stockage indisponible */ }
+
+  el("base").value = urlParDefaut();
+  el("btn-theme").addEventListener("click", basculerTheme);
+  el("btn-charge").addEventListener("click", chargerManifeste);
+  el("btn-port").addEventListener("click", choisirPort);
+  el("btn-flash").addEventListener("click", ecrire);
+  el("btn-effacer").addEventListener("click", effacerFlash);
+  el("src-depot").addEventListener("change", afficherZones);
+  el("src-local").addEventListener("change", afficherZones);
+  el("f-boot").addEventListener("change", lireFichiersChoisis);
+  el("f-part").addEventListener("change", lireFichiersChoisis);
+  el("f-app").addEventListener("change", lireFichiersChoisis);
+
+  if (!("serial" in navigator)) {
+    signaler("avert-navigateur",
+      "<b>Ce navigateur ne permet pas d'écrire dans le port série.</b> " +
+      "Ouvrez cette page dans Google Chrome ou Microsoft Edge. " +
+      "Sur Linux, pensez à ajouter votre utilisateur au groupe <code>dialout</code>.", "erreur");
+  }
+  if (!window.isSecureContext) {
+    signaler("avert-contexte",
+      "<b>Contexte non sécurisé.</b> Le port série n'est accessible qu'en HTTPS, sur " +
+      "<code>localhost</code> ou en ouvrant le fichier en local. En cas de doute, servez le " +
+      "dossier avec <code>python3 -m http.server</code> puis ouvrez " +
+      "<code>http://localhost:8000/webtool/</code>.", "alerte");
+  }
+  if (!globalThis.esptooljs || !globalThis.esptooljs.ESPLoader) {
+    signaler("avert-navigateur",
+      "<b>Moteur d'écriture absent.</b> Le fichier " +
+      "<code>vendor/esptool-js/bundle.global.js</code> est introuvable : régénérez-le avec " +
+      "<code>python3 tools/make_webtool_vendor.py</code>.", "erreur");
+    el("btn-charge").disabled = true;
+  }
+  majBoutons();
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", demarrer);
+} else {
+  demarrer();
+}
+</script>
+</body>
+</html>

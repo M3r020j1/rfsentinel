@@ -1,0 +1,44 @@
+{
+  "name": "RFSentinel",
+  "version": "1.0.0",
+  "chipFamily": "ESP32-S3",
+  "chip": "esp32s3",
+  "flashMode": "dio",
+  "flashFreq": "80m",
+  "flashSize": "16MB",
+  "parts": [
+    {
+      "id": "bootloader",
+      "name": "bootloader",
+      "file": "bootloader.bin",
+      "path": "bootloader.bin",
+      "offset": 0,
+      "size": 21648,
+      "taille": 21648,
+      "sha256": "f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297",
+      "md5": "66c481e8669648763ff9d29721395bbe"
+    },
+    {
+      "id": "partition-table",
+      "name": "partition-table",
+      "file": "partition-table.bin",
+      "path": "partition-table.bin",
+      "offset": 32768,
+      "size": 3072,
+      "taille": 3072,
+      "sha256": "4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913",
+      "md5": "6574b8a86049ee67c0de3809036d17a7"
+    },
+    {
+      "id": "rfsentinel",
+      "name": "rfsentinel",
+      "file": "rfsentinel.bin",
+      "path": "rfsentinel.bin",
+      "offset": 65536,
+      "size": 1477360,
+      "taille": 1477360,
+      "sha256": "c941ce1609143e41caa2b0b97972588a19b94f421c2b8fd5329a90a2b829d3f7",
+      "md5": "3621b73415c72d4f6168d489d3e821ff"
+    }
+  ]
+}

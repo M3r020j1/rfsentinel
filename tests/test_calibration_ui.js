@@ -1,0 +1,24 @@
+const fs=require('fs'), vm=require('vm'), assert=require('assert');
+const s=fs.readFileSync(require('path').join(__dirname,'../main/ui/index.html'),'utf8');
+const start=s.indexOf('let calibrationStatus = null;'),end=s.indexOf('/* --- init --- */',start);
+assert(start>=0 && end>start);
+const ids=['calMac','calZone','calAlert','calStop','calApply','calStatus','cfMinRssi','cfMqRssi','findStart','findPanel','findNext','findCancel','findStatus','findList'];
+const make=()=>({value:'',disabled:false,textContent:'',style:{},children:[],replaceChildren(){this.children=[];},appendChild(x){this.children.push(x);},append(...x){this.children.push(...x);},setAttribute(){}});
+const els=Object.fromEntries(ids.map(id=>[id,make()]));
+let sample={active:false,has_sample:false,kind:'',mac:'',radio_error:false},posts=[];
+let find={stage:0,overflow:false,candidates:[]};
+const ctx={state:{logged:true},document:{activeElement:null,createElement:()=>make()},$:id=>els[id],t:x=>x,msg:()=>{},
+ get:async(path)=>path.endsWith('/find')?find:sample,post:async(path,body)=>{posts.push(body);if(body.action==='start')sample={...sample,active:true,mac:body.mac,kind:body.kind};if(body.action==='find_start')sample={...sample,active:true,kind:'find'};if(body.action==='find_next')find.stage++;if(body.action==='stop')sample.active=false;}};
+vm.createContext(ctx);vm.runInContext(s.slice(start,end),ctx);
+(async()=>{await ctx.updateCalibration();assert(els.calApply.disabled);
+ els.calMac.value='aa:bb:cc:dd:ee:ff';await ctx.startCalibration('zone');assert(posts[0].mac==='AA:BB:CC:DD:EE:FF' && els.calStop.disabled===false);
+ sample={...sample,has_sample:true,minimum:-91,rssi:-70,samples:10,age:3};await ctx.updateCalibration();assert(els.calStatus.textContent.includes('-91 dBm'));
+ await ctx.stopCalibration();assert(!els.calApply.disabled);await ctx.applyCalibration();assert(posts.at(-1).action==='apply' && els.cfMinRssi.value===-91);
+ sample={...sample,kind:'alert',minimum:-68};await ctx.updateCalibration();await ctx.applyCalibration();assert(els.cfMqRssi.value===-68);
+ sample={...sample,has_sample:false};await ctx.updateCalibration();assert(els.calApply.disabled);
+ await ctx.startFind();assert(els.findPanel.style.display==='block' && els.findNext.textContent==='findNextFar');
+ await ctx.nextFind();assert(find.stage===1 && els.findNext.textContent==='findNextNear');
+ await ctx.nextFind();assert(find.stage===2 && els.findNext.textContent==='findFinish');
+ find.candidates=[{mac:'AA:AA:AA:AA:AA:01',near1:-55,far:-85,near2:-52,counts:[4,5,6],rssi:-52,age:1},{mac:'AA:AA:AA:AA:AA:02',near1:-70,far:-75,near2:-70,counts:[2,2,2],rssi:-70,age:1}];
+ await ctx.nextFind();assert(!sample.active && els.findList.children[0].children[0].textContent.includes('AA:AA:AA:AA:AA:01'));els.findList.children[0].children[1].onclick();assert(els.calMac.value==='AA:AA:AA:AA:AA:01');
+ console.log('calibration UI: start, live minimum, finish, apply both thresholds, no-sample guard passed');})().catch(e=>{console.error(e);process.exit(1)});

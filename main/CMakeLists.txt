@@ -1,0 +1,34 @@
+idf_component_register(
+    SRCS
+        "main.c"
+        "config.c"
+        "auth.c"
+        "net.c"
+        "scanner.c"
+        "store.c"
+        "wigle.c"
+        "web.c"
+        "mqtt.c"
+        "presence.c"
+        "display.c"
+        "lcd/esp_lcd_st7735.c"
+    INCLUDE_DIRS "." "lcd"
+    PRIV_REQUIRES
+        nvs_flash
+        esp_timer
+        bt
+        littlefs
+        esp_wifi
+        esp_netif
+        esp_event
+        esp_http_server
+        esp_http_client
+        json
+        mbedtls
+        esp_lcd
+        mqtt
+    EMBED_FILES
+        "${CMAKE_CURRENT_LIST_DIR}/ui/index.html"
+        "${CMAKE_CURRENT_LIST_DIR}/../logo/rfsentinel-logo.svg"
+        "${CMAKE_CURRENT_LIST_DIR}/../logo/rfsentinel-icon.svg"
+)
