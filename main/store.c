@@ -33,6 +33,7 @@ static time_t rfs_timegm(const struct tm *t) {
 #include "esp_vfs.h"
 
 #include "config.h"
+#include "ble_address.h"
 #include "net.h"
 
 static const char *TAG = "rfs.store";
@@ -42,7 +43,7 @@ static const char *TAG = "rfs.store";
 #define RFS_OBS_PREFIX "obs_"
 #define RFS_OBS_MAX_FILES 32
 #define RFS_LINE_MAX 256
-#define RFS_LIST_PAGE 10
+#define RFS_LIST_PAGE 14
 #define RFS_HIST_MAX 10
 #define RFS_USAGE_LIMIT_PCT 90
 #define RFS_SEGMENT_MAX_BYTES (32 * 1024)
@@ -341,10 +342,10 @@ static esp_err_t store_append_obs_locked(const s3_obs_t *obs, bool *appended) {
     csv_escape(obs->ssid, ssid_esc, sizeof(ssid_esc));
 
     int n = snprintf(line, sizeof(line),
-                     "%s,%s,%s,%s,%d,%d,%d,%.5f,%.5f,0,0,,%d,%s\n",
-                     obs->mac, ssid_esc, obs->auth, ts,
+                     "%s,%s,%s,%s,%d,%d,%d,%.5f,%.5f,0,0,%s,%d,%s\n",
+                     obs->mac, ssid_esc, obs->is_ble ? "BLE" : obs->auth, ts,
                      obs->channel, obs->freq, obs->rssi,
-                     (double)cfg->lat, (double)cfg->lon,
+                     (double)cfg->lat, (double)cfg->lon, obs->is_ble ? obs->auth : "",
                      obs->mfgr, obs->is_ble ? "BLE" : "WIFI");
     if (n <= 0 || n >= (int)sizeof(line) - 2) return ESP_FAIL;
 
@@ -1092,7 +1093,16 @@ struct store_export {
     long active_size, remaining, total, delivered;
     uint32_t last_segment, rewrite_generation;
     bool header_done;
+    uint8_t ble_filter;
+    char input[512], record[512];
+    size_t input_at, input_len, record_len, record_at;
+    long filtered_total;
+    unsigned record_number;
+    bool quoted, raw_eof, record_ready;
 };
+
+static esp_err_t export_filtered_read(store_export_t *h, char *buf, size_t n, size_t *read);
+static esp_err_t export_raw_read(store_export_t *h, char *buf, size_t n, size_t *read);
 
 static long export_header_bytes(FILE *f) {
     char line[RFS_LINE_MAX];
@@ -1146,6 +1156,7 @@ esp_err_t store_export_open(store_export_t **out) {
     esp_err_t result = ESP_OK;
     xSemaphoreTake(s_store_lock, portMAX_DELAY);
     h->rewrite_generation = s_store_rewrite_generation;
+    h->ble_filter = config_get()->ble_address_filter;
     if (segment_initialize() != ESP_OK) result = ESP_FAIL;
     h->last_segment = s_segment_seq;
     strlcpy(h->active, s_segment_name, sizeof(h->active));
@@ -1183,12 +1194,29 @@ esp_err_t store_export_open(store_export_t **out) {
     if (dir) closedir(dir);
     xSemaphoreGive(s_store_lock);
     if (result != ESP_OK) { free(h); return result; }
+    /* HTTP multipart requires an exact length. Scan the same bounded snapshot
+       once before sending, then rewind it; rotation invalidates either pass. */
+    char scratch[512]; size_t got = 0;
+    while ((result = export_filtered_read(h, scratch, sizeof(scratch), &got)) == ESP_OK && got) {
+        if ((long)got > LONG_MAX - h->filtered_total) { result = ESP_ERR_INVALID_SIZE; break; }
+        h->filtered_total += (long)got;
+    }
+    if (h->f) {
+        xSemaphoreTake(s_store_lock, portMAX_DELAY);
+        fclose(h->f); h->f = NULL;
+        xSemaphoreGive(s_store_lock);
+    }
+    if (result != ESP_OK) { free(h); return result; }
+    h->previous[0] = '\0'; h->name_count = h->name_index = 0;
+    h->remaining = h->delivered = 0; h->header_done = false;
+    h->input_at = h->input_len = h->record_len = h->record_at = 0;
+    h->record_number = 0; h->quoted = h->raw_eof = h->record_ready = false;
     *out = h;
     return ESP_OK;
 }
 
-long store_export_size(store_export_t *h) { return h ? h->total : 0; }
-bool store_export_has_data(store_export_t *h) { return h && h->total > (long)strlen(CSV_HDR); }
+long store_export_size(store_export_t *h) { return h ? h->filtered_total : 0; }
+bool store_export_has_data(store_export_t *h) { return h && h->filtered_total > (long)strlen(CSV_HDR); }
 
 /* Find the next name without storing a per-file table. This trades extra
    directory traversals for a fixed memory footprint even with many segments. */
@@ -1231,7 +1259,7 @@ static esp_err_t export_next(store_export_t *h, bool *found) {
     return ESP_OK;
 }
 
-esp_err_t store_export_read(store_export_t *h, char *buf, size_t n, size_t *read) {
+static esp_err_t export_raw_read(store_export_t *h, char *buf, size_t n, size_t *read) {
     if (!h || !buf || !read) return ESP_ERR_INVALID_ARG;
     *read = 0;
     size_t produced = 0;
@@ -1267,6 +1295,85 @@ done:
     xSemaphoreGive(s_store_lock);
     taskYIELD();
     return result;
+}
+
+/* Remove internal address-type metadata from the RCOIs field in the exported
+   CSV; old BLE records have unknown type and cannot pass restrictive modes. */
+static esp_err_t export_filter_record(store_export_t *h, bool *keep) {
+    *keep = true;
+    if (h->record_number++ < 2) return ESP_OK;
+    char *begin[14] = {0}, *end[14] = {0};
+    unsigned field = 0; bool quoted = false;
+    begin[0] = h->record;
+    for (size_t i = 0; i < h->record_len; i++) {
+        char c = h->record[i];
+        if (c == '"') quoted = !quoted;
+        if (!quoted && (c == ',' || c == '\n' || c == '\r')) {
+            if (field >= 14) return ESP_FAIL;
+            end[field] = h->record + i;
+            if (c == ',') { if (++field >= 14) return ESP_FAIL; begin[field] = h->record + i + 1; }
+            else break;
+        }
+    }
+    if (quoted || field != 13 || !end[13]) return ESP_FAIL;
+    bool ble = end[13] - begin[13] == 3 && !strncmp(begin[13], "BLE", 3);
+    if (!ble) return ESP_OK;
+    size_t m = (size_t)(end[11] - begin[11]);
+    rfs_ble_address_t type = RFS_BLE_UNKNOWN;
+    if (m == 10 && !strncmp(begin[11], "BLE-PUBLIC", m)) type = RFS_BLE_PUBLIC;
+    else if (m == 10 && !strncmp(begin[11], "BLE-STATIC", m)) type = RFS_BLE_STATIC;
+    else if (m == 7 && !strncmp(begin[11], "BLE-RPA", m)) type = RFS_BLE_RPA;
+    else if (m == 8 && !strncmp(begin[11], "BLE-NRPA", m)) type = RFS_BLE_NRPA;
+    *keep = rfs_ble_filter_allows(h->ble_filter, type);
+    if (m && (type != RFS_BLE_UNKNOWN || (m == 11 && !strncmp(begin[11], "BLE-UNKNOWN", m)))) {
+        memmove(begin[11], end[11], h->record_len - (size_t)(end[11] - h->record));
+        h->record_len -= m;
+    }
+    return ESP_OK;
+}
+
+static esp_err_t export_filtered_read(store_export_t *h, char *buf, size_t n, size_t *read) {
+    *read = 0;
+    xSemaphoreTake(s_store_lock, portMAX_DELAY);
+    bool changed = h->rewrite_generation != s_store_rewrite_generation;
+    xSemaphoreGive(s_store_lock);
+    if (changed) return ESP_ERR_INVALID_STATE;
+    while (*read < n) {
+        if (h->record_ready && h->record_at < h->record_len) {
+            size_t amount = h->record_len - h->record_at;
+            if (amount > n - *read) amount = n - *read;
+            memcpy(buf + *read, h->record + h->record_at, amount);
+            h->record_at += amount; *read += amount;
+            if (h->record_at < h->record_len) break;
+            h->record_at = h->record_len = 0; h->record_ready = false;
+        }
+        if (h->input_at == h->input_len && !h->raw_eof) {
+            esp_err_t err = export_raw_read(h, h->input, sizeof(h->input), &h->input_len);
+            if (err != ESP_OK) return err;
+            h->input_at = 0;
+            if (!h->input_len) h->raw_eof = true;
+        }
+        if (h->raw_eof) return h->record_len || h->quoted ? ESP_FAIL : ESP_OK;
+        char c = h->input[h->input_at++];
+        if (h->record_len == sizeof(h->record)) return ESP_ERR_INVALID_SIZE;
+        h->record[h->record_len++] = c;
+        if (c == '"') h->quoted = !h->quoted;
+        if (c == '\n' && !h->quoted) {
+            bool keep; esp_err_t err = export_filter_record(h, &keep);
+            if (err != ESP_OK) return err;
+            if (!keep) h->record_len = 0;
+            else h->record_ready = true;
+        } else {
+            /* The record isn't complete yet; do not expose partial data. */
+            continue;
+        }
+    }
+    return ESP_OK;
+}
+
+esp_err_t store_export_read(store_export_t *h, char *buf, size_t n, size_t *read) {
+    if (!h || !buf || !read) return ESP_ERR_INVALID_ARG;
+    return export_filtered_read(h, buf, n, read);
 }
 
 void store_export_close(store_export_t *h) {

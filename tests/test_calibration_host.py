@@ -40,11 +40,13 @@ typedef struct {bool active,stop_requested,has_sample,radio_error,resume_error,r
 typedef struct {char mac[18];int32_t sums[3];uint32_t counts[3];int rssi;int64_t last_sample_us;} scanner_find_entry_t;
 typedef struct {scanner_find_entry_t entries[SCANNER_FIND_MAX];uint32_t count;uint8_t stage;bool overflow;} scanner_find_result_t;
 typedef struct {char mac[18],ssid[33],auth[16],ts[20];int rssi,channel,freq,mfgr,is_ble;uint8_t time_quality;} s3_obs_t;
-typedef struct {int min_rssi,mqtt_min_rssi;} app_config_t;
-struct ble_gap_event {int type;struct {int rssi;struct{uint8_t val[6];}addr;uint8_t data[31];int length_data;}disc;};
+typedef struct {int min_rssi,mqtt_min_rssi,ble_address_filter;} app_config_t;
+struct ble_gap_event {int type;struct {int rssi;struct{uint8_t val[6];uint8_t type;}addr;uint8_t data[31];int length_data;}disc;};
 struct ble_gap_disc_params {int filter_duplicates,passive,itvl,window;};
 static scanner_calibration_t s_cal;static scanner_find_result_t s_find;static bool s_cal_radio_done,s_ble_ready=true,s_ble_failed,s_running;static int s_cal_lock;static uint32_t s_ble_count;static uint64_t s_last_wifi_us,s_last_ble_us;static void*s_task,*s_exit_sem=(void*)1;
-static int mqtt_calls,store_calls,presence_calls,deny_alloc,fail_radio,no_sample;static bool watched,excluded;static void(*pending)(void*);static app_config_t cfg={-60,-90};
+static int mqtt_calls,store_calls,presence_calls,deny_alloc,fail_radio,no_sample;static bool watched,excluded;static void(*pending)(void*);static app_config_t cfg={-60,-90,1};
+static int s_ble_diag_lock;
+static struct {uint32_t public_count,static_count,rpa_count,nrpa_count,unknown_count;} s_ble_diag;
 static const app_config_t*config_get(void){return &cfg;}
 static int64_t esp_timer_get_time(void){static int64_t t;return ++t;}
 static bool store_is_blacklisted(const char*m){(void)m;return excluded;}
@@ -71,6 +73,7 @@ static int ble_gap_disc(int a,int b,struct ble_gap_disc_params*c,int(*cb)(struct
  e.disc.addr.val[0]=0;e.disc.rssi=-120;cb(&e,arg);
  e.type=BLE_GAP_EVENT_DISC_COMPLETE;cb(&e,arg);return 0;}
 '''
+code+=(Path(__file__).resolve().parents[1]/'main/ble_address.h').read_text().replace('#pragma once','')
 for f in ['static void hex2str(', 'static int gap_event_cb(', 'esp_err_t scanner_start(', 'esp_err_t scanner_stop(', 'bool scanner_is_running(', 'static void calibration_task(', 'esp_err_t scanner_calibration_start(', 'esp_err_t scanner_calibration_stop(', 'void scanner_calibration_status(', 'esp_err_t scanner_find_start(', 'esp_err_t scanner_find_next(', 'void scanner_find_status(']:code+=fn(f)
 code+=r'''
 int main(void){scanner_calibration_t c;
@@ -85,6 +88,11 @@ int main(void){scanner_calibration_t c;
  struct ble_gap_event e={.type=BLE_GAP_EVENT_DISC};e.disc.rssi=-80;
  gap_event_cb(&e,NULL);assert(mqtt_calls==1 && store_calls==0);
  watched=true;excluded=true;e.disc.rssi=-120;gap_event_cb(&e,NULL);assert(presence_calls==1 && mqtt_calls==1 && store_calls==0);watched=false;excluded=false;
+ e.disc.addr.type=1;e.disc.addr.val[5]=0x40;e.disc.rssi=-40;
+ gap_event_cb(&e,NULL);assert(s_ble_diag.rpa_count==1 && mqtt_calls==1 && store_calls==0);
+ watched=true;gap_event_cb(&e,NULL);assert(presence_calls==2 && mqtt_calls==1 && store_calls==0);watched=false;
+ cfg.ble_address_filter=0;gap_event_cb(&e,NULL);assert(mqtt_calls==2 && store_calls==1);
+ cfg.ble_address_filter=1;e.disc.addr.type=0;
  fail_radio=1;assert(scanner_calibration_start("AA:BB:CC:DD:EE:FF","zone")==ESP_OK);pending(NULL);assert(!s_cal.active && s_cal.radio_error && !s_cal.has_sample);fail_radio=0;
  no_sample=1;assert(scanner_calibration_start("AA:BB:CC:DD:EE:FF","zone")==ESP_OK);pending(NULL);assert(!s_cal.active && !s_cal.radio_error && !s_cal.has_sample);no_sample=0;
  assert(scanner_calibration_start("AA:BB:CC:DD:EE:FF","zone")==ESP_OK);assert(scanner_calibration_stop()==ESP_OK);pending(NULL);assert(!s_cal.active && !s_cal.has_sample);

@@ -21,6 +21,7 @@
 #include "store.h"
 #include "mqtt.h"
 #include "presence.h"
+#include "ble_address.h"
 
 static const char *TAG = "rfs.scanner";
 
@@ -42,11 +43,18 @@ static uint64_t s_last_ble_us = 0;
 static uint8_t s_scan_channel = 1;
 static portMUX_TYPE s_wifi_diag_lock = portMUX_INITIALIZER_UNLOCKED;
 static scanner_wifi_diagnostics_t s_wifi_diag;
+static portMUX_TYPE s_ble_diag_lock = portMUX_INITIALIZER_UNLOCKED;
+static scanner_ble_diagnostics_t s_ble_diag;
 static portMUX_TYPE s_cal_lock = portMUX_INITIALIZER_UNLOCKED;
 static scanner_calibration_t s_cal;
 static scanner_find_result_t s_find;
 static bool s_cal_radio_done;
 #define CALIBRATION_TIMEOUT_MS (15 * 60 * 1000)
+
+void scanner_get_ble_diagnostics(scanner_ble_diagnostics_t *out) {
+    if (!out) return;
+    portENTER_CRITICAL(&s_ble_diag_lock); *out = s_ble_diag; portEXIT_CRITICAL(&s_ble_diag_lock);
+}
 
 static uint8_t wifi_next_channel(uint8_t first, uint8_t count) {
     if (first < 1 || first > 14 || count == 0 || count > 15 - first) {
@@ -264,14 +272,28 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg) {
     }
     portEXIT_CRITICAL(&s_cal_lock);
     if (calibrating || arg == &s_cal) return 0;
+    rfs_ble_address_t addr_type = rfs_ble_classify(event->disc.addr.type, event->disc.addr.val);
+    portENTER_CRITICAL(&s_ble_diag_lock);
+    uint32_t *counter = addr_type == RFS_BLE_PUBLIC ? &s_ble_diag.public_count :
+                        addr_type == RFS_BLE_STATIC ? &s_ble_diag.static_count :
+                        addr_type == RFS_BLE_RPA ? &s_ble_diag.rpa_count :
+                        addr_type == RFS_BLE_NRPA ? &s_ble_diag.nrpa_count : &s_ble_diag.unknown_count;
+    if (*counter != UINT32_MAX) ++*counter;
+    portEXIT_CRITICAL(&s_ble_diag_lock);
+    bool allowed = rfs_ble_filter_allows(cfg->ble_address_filter, addr_type);
     bool watched = presence_matches(obs.mac);
+    if (!allowed && !watched) return 0;
     bool excluded = store_is_blacklisted(obs.mac);
     if (!watched && excluded) return 0;
     obs.rssi = rssi;
     /* Format remaining fields before independently checking MQTT. */
     if (!watched && rssi < cfg->min_rssi && rssi < cfg->mqtt_min_rssi) return 0;
     parse_adv_name(event->disc.data, event->disc.length_data, obs.ssid, OBS_SSID_MAX);
-    strlcpy(obs.auth, "BLE", OBS_AUTH_MAX);
+    const char *addr_tag = addr_type == RFS_BLE_PUBLIC ? "BLE-PUBLIC" :
+                           addr_type == RFS_BLE_STATIC ? "BLE-STATIC" :
+                           addr_type == RFS_BLE_RPA ? "BLE-RPA" :
+                           addr_type == RFS_BLE_NRPA ? "BLE-NRPA" : "BLE-UNKNOWN";
+    strlcpy(obs.auth, addr_tag, OBS_AUTH_MAX);
     obs.rssi = rssi;
     obs.channel = 0;
     obs.freq = 0;
@@ -282,7 +304,7 @@ static int gap_event_cb(struct ble_gap_event *event, void *arg) {
     obs.time_quality = (uint8_t)quality;
 
     if (watched) presence_on_obs(&obs);
-    if (excluded) return 0;
+    if (excluded || !allowed) return 0;
     mqtt_on_obs(&obs);
     if (rssi < cfg->min_rssi) return 0;
 

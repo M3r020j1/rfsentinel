@@ -59,6 +59,7 @@ typedef struct {
     /* Options de scan */
     uint8_t scan_wifi;
     uint8_t scan_ble;
+    uint8_t ble_address_filter;
     uint8_t scan_autostart;
 
     /* Langue UI : 0 = FR, 1 = EN */
@@ -103,6 +104,7 @@ bool config_check_credentials(const char *user, const char *pass);
 esp_err_t config_set_wifi(const char *ssid, const char *pass);
 esp_err_t config_set_ap(const char *ssid, const char *pass);
 esp_err_t config_set_scan_autostart(uint8_t enabled);
+esp_err_t config_set_ble_address_filter(uint8_t mode);
 esp_err_t config_set_credentials(const char *user, const char *pass);
 esp_err_t config_set_token(const char *token);
 esp_err_t config_set_location(float lat, float lon);

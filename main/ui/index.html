@@ -166,6 +166,7 @@ button.it svg { width:16px; height:16px; flex:none; }
     <div class="row"><label>Wi-Fi</label><span id="stWifi">—</span></div>
     <div id="wifiScanInfo" style="color:var(--muted);font-size:12px"></div>
     <div class="row"><label>BLE</label><span id="stBle">—</span></div>
+    <div id="bleAddressInfo" style="color:var(--muted);font-size:12px"></div>
     <div style="color:var(--muted);font-size:12px" data-i18n="counterNote">Observations présentes dans le journal, toutes pages confondues.</div>
     <div class="row"><label data-i18n="journal">Journal</label><span id="stStore">—</span></div>
     <div class="row"><label>MQTT</label><span id="stMqtt">—</span></div>
@@ -287,6 +288,8 @@ button.it svg { width:16px; height:16px; flex:none; }
       <div class="row"><label data-i18n="rdisc">Rédecouverte (min)</label><input id="cfRdisc"></div>
       <div class="row"><label>Wi-Fi</label><input id="cfScanWifi" type="checkbox" style="width:20px"></div>
       <div class="row"><label>BLE</label><input id="cfScanBle" type="checkbox" style="width:20px"></div>
+      <div class="row"><label for="cfBleFilter" data-i18n="bleFilter">Adresses BLE</label><select id="cfBleFilter"><option value="0" data-i18n="bleAll">Toutes</option><option value="1" data-i18n="bleStable">Stables</option><option value="2" data-i18n="blePublic">Publiques uniquement</option></select></div>
+      <p data-i18n="bleFilterHelp" style="color:var(--muted);font-size:12px">Toutes : toutes les adresses. Stables : publiques et aléatoires statiques. Publiques : adresses publiques uniquement. Les anciennes lignes BLE sans type sont exclues des exports filtrés.</p>
       <h3>MQTT</h3>
       <div class="row"><label data-i18n="enable">Activation</label><input id="cfMqEn" type="checkbox" style="width:20px"></div>
       <div class="row"><label for="cfMqBroker" data-i18n="mqttBroker">Broker (sans protocole)</label><input id="cfMqBroker" placeholder="192.168.1.1" aria-describedby="mqttBrokerHint"></div>
@@ -402,6 +405,7 @@ const I18N = {
     findStart:"Trouver mon appareil", findCancel:"Arrêter la recherche", findNear1:"Étape 1/3 : placez l’appareil près de la clé et attendez au moins 10 secondes, puis éloignez-vous et cliquez ci-dessous.", findFar:"Étape 2/3 : restez éloigné au moins 10 secondes, puis rapprochez-vous et cliquez ci-dessous.", findNear2:"Étape 3/3 : restez à nouveau près de la clé au moins 10 secondes, puis affichez les résultats.", findNextFar:"Je suis éloigné", findNextNear:"Je suis revenu près de la clé", findFinish:"Afficher les résultats", findResults:"Candidats possibles : sélectionnez-en un, puis lancez une calibration. Le classement ne prouve pas l’identité de l’appareil.", findEmpty:"Aucun candidat reçu aux trois étapes. L’appareil peut ne pas émettre ou avoir changé d’adresse.", findOverflow:"Liste limitée à 48 adresses : des appareils peuvent manquer.", findSelect:"Choisir", findScore:"variation proche/loin", findInsufficient:"mesures incomplètes", findUncertain:"mouvement non confirmé", findSelected:"Adresse sélectionnée. Lancez une calibration.",
     rdisc:"Rédecouverte (min)", enable:"Activation", save:"Enregistrer",
     upload:"Upload WiGLE", logout:"Déconnexion", blSec:"Équipements exclus",
+    bleFilter:"Adresses BLE", bleAll:"Toutes", bleStable:"Stables", blePublic:"Publiques uniquement", bleFilterHelp:"Toutes : toutes les adresses. Stables : publiques et aléatoires statiques. Publiques : adresses publiques uniquement. Les anciennes lignes BLE sans type sont exclues des exports filtrés.",
     presenceTitle:"Alertes de présence", presenceAdd:"Ajouter à la liste", presenceNote:"Alerte MQTT à la détection, quel que soit le niveau de signal, puis après une absence.", presenceTopic:"Topic présence", presenceAbsence:"Absence avant retour (min)", presenceInvalid:"Topic ou durée de présence invalide (minimum 0,5 minute, topic différent des alertes).", presenceSavedError:"Impossible d’enregistrer les réglages de présence.",
     showValue:"Afficher la valeur saisie", hideValue:"Masquer la valeur saisie", wigleConfirmTitle:"Envoyer le journal à WiGLE ?", wigleConfirmBody:"Un fichier CSV regroupant les observations du journal, y compris celles déjà envoyées, sera transmis à WiGLE.", secretHint:"L’œil affiche le champ en cours de saisie. Une valeur déjà enregistrée ne peut pas être affichée.",
     wigleSending:"Envoi WiGLE en cours", wigleAccepted:"Envoi accepté par WiGLE ; traitement en attente", wigleFailed:"Échec de l’envoi WiGLE", wiglePartial:"Envoi WiGLE partiel", wigleEmpty:"Aucun fichier de journal à envoyer", wigleStatusLost:"Suivi indisponible : l’envoi peut continuer sur la clé.", wigleNoCredentials:"Renseignez l’API Name et l’API Token WiGLE dans Configuration, puis enregistrez.", wigleNoNetwork:"La clé doit être connectée à un réseau avec accès Internet.", wigleBusy:"Un envoi WiGLE est déjà en cours.",
@@ -449,6 +453,7 @@ const I18N = {
     findStart:"Find my device", findCancel:"Stop searching", findNear1:"Step 1/3: place the device near the receiver for at least 10 seconds, then move away and click below.", findFar:"Step 2/3: stay away for at least 10 seconds, then return near the receiver and click below.", findNear2:"Step 3/3: stay near the receiver again for at least 10 seconds, then show the results.", findNextFar:"I am away", findNextNear:"I am back nearby", findFinish:"Show results", findResults:"Possible candidates: select one, then start calibration. Ranking does not prove device identity.", findEmpty:"No candidate was received in all three steps. The device may not advertise or its address may have changed.", findOverflow:"Limited to 48 addresses: some devices may be missing.", findSelect:"Select", findScore:"near/far change", findInsufficient:"incomplete samples", findUncertain:"movement not confirmed", findSelected:"Address selected. Start a calibration.",
     rdisc:"Rediscovery (min)", enable:"Enable", save:"Save",
     upload:"Upload to WiGLE", logout:"Sign out", blSec:"Excluded devices",
+    bleFilter:"BLE addresses", bleAll:"All", bleStable:"Stable", blePublic:"Public only", bleFilterHelp:"All: every address. Stable: public and random static. Public: public addresses only. Older BLE records with unknown type are omitted from filtered exports.",
     presenceTitle:"Presence alerts", presenceAdd:"Add to list", presenceNote:"MQTT alert on detection at any signal level, then after an absence.", presenceTopic:"Presence topic", presenceAbsence:"Absence before return (min)", presenceInvalid:"Invalid presence topic or duration (at least 0.5 minute; use a different topic).", presenceSavedError:"Could not save presence settings.",
     secretHint:"The eye shows the field being entered. A value already saved cannot be displayed.", wigleConfirmTitle:"Send the log to WiGLE?", wigleConfirmBody:"One CSV containing journal observations, including those already sent, will be sent to WiGLE.", showValue:"Show the entered value", hideValue:"Hide the entered value",
     wigleSending:"Uploading to WiGLE", wigleAccepted:"Accepted by WiGLE; processing pending", wigleFailed:"WiGLE upload failed", wiglePartial:"WiGLE upload partially complete", wigleEmpty:"No journal files to upload", wigleStatusLost:"Status unavailable: the upload may still be running on the device.", wigleNoCredentials:"Enter the WiGLE API Name and API Token in Settings and save.", wigleNoNetwork:"The device must be connected to a network with Internet access.", wigleBusy:"A WiGLE upload is already running.",
@@ -765,6 +770,7 @@ async function loadConfig() {
     $("cfRdisc").value = j.rediscover_min;
     $("cfScanWifi").checked = !!j.scan_wifi;
     $("cfScanBle").checked = !!j.scan_ble;
+    $("cfBleFilter").value = String(j.ble_address_filter ?? 1);
     $("cfScanAuto").checked = !!j.scan_autostart;
     $("cfMqEn").checked = !!j.mqtt_enabled;
     $("cfMqBroker").value = j.mqtt_broker || "";
@@ -806,6 +812,7 @@ async function saveConfig() {
     rediscover_min: parseInt($("cfRdisc").value, 10),
     scan_wifi: $("cfScanWifi").checked ? 1 : 0,
     scan_ble: $("cfScanBle").checked ? 1 : 0,
+    ble_address_filter: Number($("cfBleFilter").value),
     scan_autostart: $("cfScanAuto").checked ? 1 : 0,
     ui_lang: lang === "fr" ? 0 : 1,
     mqtt_enabled: $("cfMqEn").checked ? 1 : 0,
@@ -1496,6 +1503,7 @@ async function refresh() {
     const countPending = j.store_ok ? (lang === "fr" ? "Calcul…" : "Counting…") : (lang === "fr" ? "Indisponible" : "Unavailable");
     $("stWifi").textContent = j.wifi == null ? countPending : j.wifi;
     $("stBle").textContent = j.ble == null ? countPending : j.ble;
+    $("bleAddressInfo").textContent = (lang === "fr" ? "Détections BLE depuis le démarrage" : "BLE detections since startup") + ": Public " + (j.ble_public || 0) + " · Static " + (j.ble_static || 0) + " · RPA " + (j.ble_rpa || 0) + " · NRPA " + (j.ble_nrpa || 0) + " · ? " + (j.ble_unknown || 0);
     if (j.wifi_scan_attempts > 0) {
       const ch = j.wifi_scan_channel ? (lang === "fr" ? "canal " : "channel ") + j.wifi_scan_channel : (lang === "fr" ? "tous canaux" : "all channels");
       const last = lang === "fr" ? "Dernier scan Wi-Fi 2,4 GHz : il y a " : "Last 2.4 GHz Wi-Fi scan: ";

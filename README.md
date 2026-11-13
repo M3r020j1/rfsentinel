@@ -26,10 +26,36 @@ and Bluetooth LE advertisements — timestamps them, records them in its own fla
 and serves them over a built-in web interface. It joins no network, decrypts
 nothing, intercepts no communication: it observes, it records, it displays.
 
-Built to fit in a pocket and run without any infrastructure, it is as useful for
-mapping the networks of a neighbourhood as for inventorying the BLE objects in an
-office, for watching a perimeter, or simply for understanding what is transmitting
-around you.
+The starting point is a place with a problem: a house, a shop, a business.
+RFSentinel keeps the record of what was within radio range while the facts happened.
+The recording threshold (`min_rssi`, -95 dBm by default) sets that range, wide or
+narrow depending on the room, the shop or the car park you want to cover, and the
+dongle writes down everything that passes: Wi-Fi and Bluetooth LE addresses, possible
+SSIDs, signal level, timestamp. Afterwards you filter the journal over a time range
+and get the list of the devices that were there between such hour and such hour on
+that day.
+
+That list serves to relocate. Every address seen by RFSentinel can be queried in
+WiGLE's public tables from the device itself: the history of known positions appears
+in the interface, in chronological order and on the map. A phone, a watch or an
+object that was transmitting during the incident is thus matched against the places
+where it has already been picked up. The approach holds up best for Wi-Fi and for
+stable Bluetooth addresses: phones advertise temporary BLE addresses that nothing
+lets you follow over time or find back on WiGLE, hence the filtering described below.
+
+The dongle runs in two ways, depending on the place. Connected to your Wi-Fi network
+— the option to prefer — it takes the time from the NTP server, contacts WiGLE and
+publishes its alerts over MQTT. With no network in range, it opens its own access
+point and all that is left is to set the time from the interface: the board has no
+internal clock that keeps time, but the time set by hand is saved periodically and
+found again after a restart. Passive scanning and journal writes never stop: with or
+without a network, everything that passes within range is recorded.
+
+Alerting comes second. RFSentinel publishes a newly detected device over MQTT
+(`/rfsentinel/alert`) and the appearance or return of a watched device
+(`/rfsentinel/presence`, 32 addresses at most with their labels), so that Home
+Assistant or any controller can react to a message. The heart of the product stays
+the journal: knowing afterwards what was there, at what distance and at what time.
 
 
 ## Overview
@@ -62,6 +88,8 @@ lit for one minute before switching off and releasing the memory used by scannin
 - De-duplication in RAM with configurable rediscovery: a device becomes "new" again
   after N minutes of absence.
 - Persistent MAC **exclusion list** (blacklist) to ignore the devices next door for good.
+- Three **BLE filtering** modes (`All`, `Stable` by default, `Public only`) keep
+  temporary addresses out of the journal.
 
 **Logging**
 
@@ -82,7 +110,7 @@ lit for one minute before switching off and releasing the memory used by scannin
   in the browser.
 - Live state: network mode, IP, clock quality, Wi-Fi and BLE counters, journal usage,
   MQTT state.
-- Paginated observations (10 per page), filtered by type and date range, sortable.
++ Paginated observations (14 per page), filtered by type and date range, sortable.
 - **Per-device history**: every appearance of a MAC address, with direct selection
   on the map.
 - **Map** rendered in a `<canvas>` with OpenStreetMap tiles and **address →
@@ -112,6 +140,34 @@ lit for one minute before switching off and releasing the memory used by scannin
   screen. The display switches off **after one minute** and releases the 25.6 KB of DMA
   RAM reserved for rendering. That is what makes WiGLE queries possible: wait for the
   screen to go dark before consulting a device's WiGLE history.
+
+### Bluetooth LE: MAC address rotation and filtering
+
+Unlike many Wi-Fi devices, Bluetooth Low Energy (BLE) devices — smartphones,
+connected watches, earbuds in particular — can use **temporary MAC addresses** that
+change regularly to protect their users' privacy.
+
+This mechanism, provided for by the Bluetooth specification, makes it hard to
+identify the same device over time. It also fills the journal with entries that can
+never reliably be found back on platforms such as WiGLE.
+
+**To limit the problem, RFSentinel offers three BLE filtering modes:**
+
+- **All:** records every address detected, temporary ones included.
+- **Stable (default):** keeps only public addresses (*Public*) and static random
+  addresses (*Random Static*).
+- **Public only:** keeps public MAC addresses exclusively.
+
+Temporary **RPA and NRPA** addresses left out of the journal are still counted in the
+BLE activity statistics.
+
+The filtering cuts down useless records, saves storage space and favours addresses
+that may persist, and are therefore more useful for identification or for a later
+search on WiGLE.
+
+**Limit:** a Random Static address is not necessarily permanent, and no address kept
+in the journal is guaranteed to be referenced in WiGLE. Filtering improves how useful
+the data is without guaranteeing that devices get identified.
 
 ## Hardware
 
@@ -175,7 +231,7 @@ The three images for the current version are in the [`bin/`](bin) folder, next t
 |---|---|---|---|
 | `0x0` | `bootloader.bin` | 21,648 B | `f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297` |
 | `0x8000` | `partition-table.bin` | 3,072 B | `4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913` |
-| `0x10000` | `rfsentinel.bin` | 1,477,360 B | `c941ce1609143e41caa2b0b97972588a19b94f421c2b8fd5329a90a2b829d3f7` |
+| `0x10000` | `rfsentinel.bin` | 1,481,408 B | `21a843ad6ec9300d710d665558475adf86aceeba4d0947dc04ba5ef23c94b930` |
 
 Verify them before writing:
 
@@ -505,8 +561,8 @@ tests/                  host-side tests (logic, API, interface)
 
 ## Tests
 
-Twenty-six standalone programs run on the development machine, with no ESP-IDF and no
-board: eighteen in Python, seven in JavaScript with Node, one in C. They cover the
+Twenty-nine standalone programs run on the development machine, with no ESP-IDF and
+no board: nineteen in Python, eight in JavaScript with Node, two in C. They cover the
 logic that does not depend on hardware — journal and rotation, CSV export, calibration
 and its thresholds, MQTT threshold and de-duplication, watched devices and presence
 alerts, recounting, concurrent access, LittleFS iteration, WiGLE lookups under
@@ -520,11 +576,13 @@ for t in tests/test_*.js; do node "$t"; done
 LFS=managed_components/joltwallet__littlefs/src/littlefs
 cc -I"$LFS" tests/test_littlefs_iter_host.c "$LFS/lfs.c" "$LFS/lfs_util.c" \
    -o /tmp/lfs_iter && /tmp/lfs_iter
+
+cc -Imain tests/test_ble_address.c -o /tmp/bleaddr && /tmp/bleaddr
 ```
 
-The C test compiles against the LittleFS library fetched by ESP-IDF, so
-`idf.py reconfigure` has to have run at least once. The other twenty-five start as
-they are.
+The LittleFS test compiles against the library fetched by ESP-IDF, so `idf.py
+reconfigure` has to have run at least once. The BLE address test only needs the
+headers from `main/`. The other twenty-seven start as they are.
 
 ## Known limitations
 
@@ -538,6 +596,9 @@ they are.
   the list does not prove absence of a transmitter.
 - Position depends on configuration: with no coordinates entered, observations are
   timestamped but not located.
+- Phones and BLE objects advertise temporary addresses (RPA, NRPA) that are found
+  neither from one session to the next, nor on WiGLE. Filtering keeps the stable
+  addresses by default, without guaranteeing that they are permanent.
 
 ## License
 

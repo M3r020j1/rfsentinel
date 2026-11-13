@@ -7,6 +7,7 @@
 #include "nvs.h"
 #include "nvs_flash.h"
 #include "esp_log.h"
+#include "ble_address.h"
 
 static const char *TAG = "rfs.cfg";
 
@@ -31,6 +32,7 @@ static const char *TAG = "rfs.cfg";
 #define K_RDISC      "rdisc"
 #define K_SCAN_WIFI  "scan_wifi"
 #define K_SCAN_BLE   "scan_ble"
+#define K_BLE_FILTER "ble_filter"
 #define K_SCAN_AUTO  "scan_auto"
 #define K_UI_LANG    "ui_lang"
 #define K_MQ_EN      "mq_en"
@@ -149,6 +151,7 @@ void config_defaults(app_config_t *c) {
     c->rediscover_min = 60;
     c->scan_wifi = 1;
     c->scan_ble = 1;
+    c->ble_address_filter = RFS_BLE_FILTER_STABLE;
     c->scan_autostart = 1;
     c->ui_lang = 0;
     c->mqtt_enabled = 0;
@@ -205,6 +208,8 @@ esp_err_t config_init(void) {
     load_u16(h, K_RDISC, &s_cfg.rediscover_min, 60);
     load_u8(h, K_SCAN_WIFI, &s_cfg.scan_wifi, 1);
     load_u8(h, K_SCAN_BLE, &s_cfg.scan_ble, 1);
+    load_u8(h, K_BLE_FILTER, &s_cfg.ble_address_filter, RFS_BLE_FILTER_STABLE);
+    if (s_cfg.ble_address_filter > RFS_BLE_FILTER_PUBLIC) s_cfg.ble_address_filter = RFS_BLE_FILTER_STABLE;
     load_u8(h, K_SCAN_AUTO, &s_cfg.scan_autostart, 1);
     load_u8(h, K_UI_LANG, &s_cfg.ui_lang, 0);
 
@@ -356,6 +361,18 @@ esp_err_t config_set_scan_autostart(uint8_t enabled) {
     if (err == ESP_OK) err = nvs_commit(h);
     nvs_close(h);
     if (err == ESP_OK) s_cfg.scan_autostart = value;
+    return err;
+}
+
+esp_err_t config_set_ble_address_filter(uint8_t mode) {
+    if (mode > RFS_BLE_FILTER_PUBLIC) return ESP_ERR_INVALID_ARG;
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(NVS_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    err = nvs_set_u8(h, K_BLE_FILTER, mode);
+    if (err == ESP_OK) err = nvs_commit(h);
+    nvs_close(h);
+    if (err == ESP_OK) s_cfg.ble_address_filter = mode;
     return err;
 }
 

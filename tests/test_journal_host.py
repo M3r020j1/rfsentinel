@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Host tests of the journal listing/purge code with synthetic POSIX files."""
 from pathlib import Path
-import json, subprocess, tempfile
+import json, re, subprocess, tempfile
 s=(Path(__file__).resolve().parents[1]/'main/store.c').read_text()
+page_size=int(re.search(r'#define RFS_LIST_PAGE\s+(\d+)',s).group(1))
 def fn(marker):
     a=s.rfind('\n',0,s.index(marker))+1; b=s.index('{',a); i=b+1; depth=1
     while depth:
@@ -27,7 +28,7 @@ code=r'''
 #define RFS_OBS_DIR test_dir
 #define RFS_OBS_PREFIX "obs_"
 #define RFS_LINE_MAX 256
-#define RFS_LIST_PAGE 10
+#define RFS_LIST_PAGE 14
 #define RFS_HIST_MAX 10
 #define portMAX_DELAY 0
 #define ESP_OK 0
@@ -51,11 +52,26 @@ static void *test_malloc(size_t n){return fail_malloc ? NULL : malloc(n);}
 #define fopen test_fopen
 #define malloc test_malloc
 '''
+code=code.replace('#define RFS_LIST_PAGE 14', f'#define RFS_LIST_PAGE {page_size}')
 for name in ['static time_t rfs_timegm(', 'static void json_escape(', 'static int csv_fields(', 'static int csv_read_record(', 'static bool obs_file(', 'static const char *obs_file_time_quality(', 'static bool observation_in_range(']: code+=fn(name)
 code+=s[a:b]+'\n'+fn('esp_err_t store_history(')+fn('esp_err_t store_purge(')
 code+=r'''
 int main(int argc,char **argv){
  assert(argc==2);test_dir=argv[1];
+ char stress_dir[180];snprintf(stress_dir,sizeof(stress_dir),"%s/stress",test_dir);assert(mkdir(stress_dir,0700)==0);
+ const char *original_dir=test_dir;test_dir=stress_dir;
+ char stress_path[220];snprintf(stress_path,sizeof(stress_path),"%s/obs_s0000000001_N.csv",test_dir);
+ FILE *stress=fopen(stress_path,"w");assert(stress);fputs("header\nheader\n",stress);
+ for(int i=0;i<14;i++){
+  fputs("AA:BB:CC:DD:EE:FF,\"",stress);for(int j=0;j<32;j++)fputs("\"\"",stress);
+  fputs("\",WPA2,2024-01-01 00:00:00,13,2472,-128,-90.00000,-180.00000,0,0,,0,WIFI\n",stress);
+ }
+ fclose(stress);char stress_out[4096];rfs_list_opt_t stress_opt={.sort="ssid",.dir="asc"};
+ assert(store_list(1,NULL,&stress_opt,stress_out,sizeof(stress_out))==ESP_OK);
+ int rows=0;for(char *q=stress_out;(q=strstr(q,"\"mac\":"))!=NULL;q+=6)rows++;assert(rows==14);
+ stress_opt.sort=NULL;assert(store_list(1,NULL,&stress_opt,stress_out,sizeof(stress_out))==ESP_OK);
+ rows=0;for(char *q=stress_out;(q=strstr(q,"\"mac\":"))!=NULL;q+=6)rows++;assert(rows==14);
+ assert(unlink(stress_path)==0 && rmdir(stress_dir)==0);test_dir=original_dir;
  for(int file=0;file<120;file++){
   char path[200];snprintf(path,sizeof(path),"%s/obs_s%010d_N.csv",test_dir,file+1);
   FILE*f=fopen(path,"w");assert(f);fputs("header\nheader\n",f);
@@ -99,6 +115,6 @@ with tempfile.TemporaryDirectory(prefix='rfs-',dir='/tmp') as t:
  history=pages.pop(); assert history['truncated'] and len(history['observations'])==10
  assert [r['ts'] for r in history['observations']] == [f'2025-01-01 00:{i:02}:00' for i in range(59,49,-1)]
  assert [[v['ssid'] for v in page['observations']] for page in pages] == [
-  [f'ssid{x:05}' for x in range(10)], [f'ssid{x:05}' for x in range(10,20)],
-  [f'ssid{x:05}' for x in range(1,20,2)], [f'ssid{x:05}' for x in range(1,20,2)]]
+  [f'ssid{x:05}' for x in range(14)], [f'ssid{x:05}' for x in range(14,28)],
+  [f'ssid{x:05}' for x in range(1,28,2)], [f'ssid{x:05}' for x in range(1,28,2)]]
  print('24000 observations: sorted pages, date filtering, purge, multiline and latest local history passed')

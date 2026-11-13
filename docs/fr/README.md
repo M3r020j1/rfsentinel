@@ -21,16 +21,45 @@
 <p align="center"><strong>Français</strong> · <a href="../../README.md">English</a></p>
 
 RFSentinel écoute l'environnement radio qui nous entoure et le rend lisible.
-Branché sur un port USB, il capte les trames **librement diffusées** — les beacons
-Wi-Fi et les advertisements Bluetooth LE — les horodate, les journalise dans sa
-propre flash, et les expose sur une interface Web embarquée. Il ne se connecte à
-aucun réseau, ne déchiffre rien, n'intercepte aucune communication : il observe,
-il note, il affiche.
+Branché sur un port USB, il capte les trames **librement diffusées** — les
+beacons Wi-Fi et les advertisements Bluetooth LE — les horodate, les journalise
+dans sa propre flash, et les expose sur une interface Web embarquée. Il ne se
+connecte à aucun des réseaux qu'il enregistre, ne déchiffre rien, n'intercepte
+aucune communication : il observe, il note, il affiche.
 
-Pensé pour tenir dans la poche et fonctionner sans infrastructure, il sert aussi
-bien à cartographier les réseaux d'un quartier qu'à inventorier les objets BLE
-d'un bureau, à surveiller un périmètre ou simplement à comprendre ce qui émet
-autour de soi.
+Le point de départ est un lieu qui a un problème : une maison, un magasin, une
+entreprise. RFSentinel garde la trace de ce qui se trouvait à portée de radio
+pendant les faits. Le seuil d'enregistrement (`min_rssi`, -95 dBm par défaut)
+règle cette portée, large ou étroite selon la pièce, le magasin ou le parking que
+l'on veut couvrir, et la clé écrit tout ce qui passe : adresses Wi-Fi et
+Bluetooth LE, SSID éventuels, niveau du signal, horodatage. Plus tard, on filtre
+le journal sur une plage d'heures et l'on obtient la liste des équipements qui
+ont été là entre telle heure et telle heure ce jour-là.
+
+Cette liste sert à relocaliser. Chaque adresse vue par RFSentinel peut être
+interrogée dans les tables publiques de WiGLE depuis l'appareil : l'historique
+des positions connues s'affiche dans l'interface, en ordre chronologique et sur
+la carte. On rapproche ainsi un téléphone, une montre ou un objet qui émettait
+pendant l'incident des endroits où il a déjà été capté. La démarche vaut
+surtout pour le Wi-Fi et pour les adresses Bluetooth stables : les téléphones
+diffusent des adresses BLE temporaires que rien ne permet de suivre dans le
+temps ni de retrouver sur WiGLE, d'où le filtrage décrit plus bas.
+
+Deux façons de faire tourner la clé, selon l'endroit. Connectée à votre réseau
+Wi-Fi — c'est la solution à privilégier —, elle reprend l'heure sur le serveur
+NTP, contacte WiGLE et publie ses alertes sur MQTT. Sans réseau à portée, elle
+ouvre son propre point d'accès et il ne reste qu'à lui régler l'heure depuis
+l'interface : la carte n'a pas d'horloge interne qui la conserve, mais l'heure
+réglée à la main est enregistrée périodiquement et retrouvée après un
+redémarrage. Le scan passif et l'écriture du journal, eux, ne s'arrêtent pas :
+avec ou sans réseau, tout ce qui passe à portée est noté.
+
+Alerter vient en second. RFSentinel publie sur MQTT un nouvel équipement détecté
+(`/rfsentinel/alert`) et l'apparition ou le retour d'un équipement suivi
+(`/rfsentinel/presence`, 32 adresses au maximum avec leur libellé), de sorte que
+Home Assistant ou n'importe quel automate peut réagir à un message. Le cœur du
+produit reste le journal : savoir après coup ce qui était là, à quelle distance
+et à quelle heure.
 
 ## Aperçu
 
@@ -64,6 +93,8 @@ le scan :
   « nouveau » après N minutes d'absence.
 - Liste d'**exclusions** (blacklist) par MAC, persistée, pour ignorer définitivement
   les équipements « à porte ».
+- Trois modes de **filtrage BLE** (`Tous`, `Stable` par défaut, `Public
+  uniquement`) pour écarter les adresses temporaires du journal.
 
 **Journalisation**
 
@@ -86,7 +117,7 @@ le scan :
   mémorisés localement dans le navigateur.
 - État en direct : mode réseau, IP, qualité de l'horloge, compteurs Wi-Fi et BLE,
   occupation du journal, état MQTT.
-- Observations paginées (10 par page), filtrées par type et par plage de dates,
++ Observations paginées (14 par page), filtrées par type et par plage de dates,
   triables.
 - **Historique par équipement** : toutes les apparitions d'une adresse MAC, avec
   sélection directe sur la carte.
@@ -120,6 +151,39 @@ le scan :
   les 25,6 Ko de RAM DMA réservés à l'affichage. C'est ce qui rend les requêtes
   WiGLE possibles : il faut donc attendre l'extinction de l'écran avant de
   consulter l'historique d'un équipement sur WiGLE.
+
+### Bluetooth BLE : rotation des adresses MAC et filtrage
+
+Contrairement à de nombreux équipements Wi-Fi, les appareils Bluetooth Low
+Energy (BLE), notamment les smartphones, montres connectées et écouteurs,
+peuvent utiliser des **adresses MAC temporaires** qui changent régulièrement
+pour protéger la vie privée de leurs utilisateurs.
+
+Ce mécanisme, prévu par le protocole Bluetooth, rend difficile l'identification
+d'un même appareil dans le temps. Il peut également générer de nombreuses
+entrées dans les journaux, sans possibilité fiable de retrouver ultérieurement
+ces adresses sur des plateformes comme WiGLE.
+
+**Pour limiter ce problème, RFSentinel propose trois modes de filtrage BLE :**
+
+- **Tous :** enregistre toutes les adresses détectées, y compris
+  temporaires.
+- **Stable (par défaut) :** conserve uniquement les adresses publiques
+  (*Public*) et aléatoires statiques (*Random Static*).
+- **Public uniquement :** conserve exclusivement les adresses MAC publiques.
+
+Les adresses temporaires **RPA et NRPA** exclues du journal restent prises en
+compte dans les statistiques d'activité BLE.
+
+Ce filtrage permet de réduire les enregistrements inutiles, d'économiser
+l'espace de stockage et de privilégier les adresses potentiellement
+persistantes, donc plus intéressantes pour une identification ou une recherche
+ultérieure dans WiGLE.
+
+**Limite :** une adresse Random Static n'est pas nécessairement permanente, et
+aucune adresse conservée n'est garantie d'être référencée dans WiGLE. Le
+filtrage améliore la pertinence des données sans garantir l'identification des
+équipements.
 
 ## Matériel
 
@@ -177,8 +241,8 @@ complet pour HTTPS, serveur HTTP embarqué.
 
 ## Flash
 
-Les binaires de la version 1.0.0 sont joints à la
-[release](https://github.com/M3r020j1/rfsentinel/releases/tag/v1.0.0).
+Les trois images de la version courante se trouvent dans le dossier
+[`bin/`](../../bin), à côté d'un fichier `SHA256SUMS`, pour flasher sans compiler.
 Paramètres de flash :
 `--flash_mode dio --flash_freq 80m --flash_size 16MB`.
 
@@ -186,14 +250,14 @@ Paramètres de flash :
 |---|---|---|
 | `0x0` | `bootloader.bin` | 21 648 o |
 | `0x8000` | `partition-table.bin` | 3 072 o |
-| `0x10000` | `rfsentinel.bin` | 1 477 360 o |
+| `0x10000` | `rfsentinel.bin` | 1 481 408 o |
 
 Empreintes SHA-256 des binaires de la version 1.0.0 :
 
 ```
 f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297  bootloader.bin
 4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913  partition-table.bin
-c941ce1609143e41caa2b0b97972588a19b94f421c2b8fd5329a90a2b829d3f7  rfsentinel.bin
+21a843ad6ec9300d710d665558475adf86aceeba4d0947dc04ba5ef23c94b930  rfsentinel.bin
 ```
 
 ```bash
@@ -435,8 +499,8 @@ DOCUMENTATION.md        architecture, choix techniques, constantes, reprise
 
 ## Tests
 
-Vingt-six programmes autonomes tournent sur la machine de développement, sans
-ESP-IDF ni carte : dix-huit en Python, sept en JavaScript avec Node, un en C. Ils
+Vingt-neuf programmes autonomes tournent sur la machine de développement, sans
+ESP-IDF ni carte : dix-neuf en Python, huit en JavaScript avec Node, deux en C. Ils
 couvrent la logique qui ne dépend pas du matériel — journal et rotation, export CSV,
 calibration et ses seuils, seuil et déduplication MQTT, équipements surveillés et
 alertes de présence, recomptage, accès concurrents, itération LittleFS, recherches
@@ -450,11 +514,14 @@ for t in tests/test_*.js; do node "$t"; done
 LFS=managed_components/joltwallet__littlefs/src/littlefs
 cc -I"$LFS" tests/test_littlefs_iter_host.c "$LFS/lfs.c" "$LFS/lfs_util.c" \
    -o /tmp/lfs_iter && /tmp/lfs_iter
+
+cc -Imain tests/test_ble_address.c -o /tmp/bleaddr && /tmp/bleaddr
 ```
 
-Le test en C se compile contre la bibliothèque LittleFS récupérée par ESP-IDF : il
-faut donc avoir lancé au moins une fois `idf.py reconfigure`. Les vingt-cinq
-autres se lancent tels quels.
+Le test LittleFS se compile contre la bibliothèque LittleFS récupérée par ESP-IDF :
+il faut donc avoir lancé au moins une fois `idf.py reconfigure`. Le test sur les
+adresses BLE ne demande que les en-têtes de `main/`. Les vingt-sept autres se
+lancent tels quels.
 
 ## Limites connues
 
@@ -468,6 +535,10 @@ autres se lancent tels quels.
   dans la liste ne prouve pas l'absence d'émetteur.
 - La position dépend de la configuration : sans coordonnées saisies, les
   observations sont horodatées mais non localisées.
+- Les téléphones et objets BLE publient des adresses temporaires (RPA, NRPA)
+  qui ne se retrouvent ni d'une séance à l'autre, ni sur WiGLE. Le filtrage
+  garde les adresses stables par défaut, sans garantir qu'elles soient
+  permanentes.
 
 ## Licence
 

@@ -48,25 +48,25 @@ the use made of the data.
 | Screen | TFT **ST7735**, 128×160 panel driven as **160×80 landscape** |
 | Wi-Fi | 2.4 GHz only, **100 % passive** scan |
 | BLE | NimBLE, **central + observer**, advertisements only |
-| GPS | **None** — latitude/longitude entered by hand, ``0` = unknown |
+| GPS | **None** — latitude/longitude entered by hand, `0` = unknown |
 | USB | USB-C, USB-Serial-JTAG device |
 
 ### Screen wiring
 
-Read from ``display.c`, confirmed on the board:
+Read from `display.c`, confirmed on the board:
 
 | Role | GPIO | Constant |
 |---|---|---|
-| SPI clock | **5** | ``RFS_PIN_LCD_CLK` |
-| SPI MOSI | **3** | ``RFS_PIN_LCD_MOSI` |
-| Data/Command | **2** | ``RFS_PIN_LCD_DC` |
-| Reset | **1** | ``RFS_PIN_LCD_RST` |
-| Chip select | **4** | ``RFS_PIN_LCD_CS` |
-| Backlight | **38**, **active low** | ``RFS_PIN_LCD_BL` |
+| SPI clock | **5** | `RFS_PIN_LCD_CLK` |
+| SPI MOSI | **3** | `RFS_PIN_LCD_MOSI` |
+| Data/Command | **2** | `RFS_PIN_LCD_DC` |
+| Reset | **1** | `RFS_PIN_LCD_RST` |
+| Chip select | **4** | `RFS_PIN_LCD_CS` |
+| Backlight | **38**, **active low** | `RFS_PIN_LCD_BL` |
 
-The bus is ``SPI2_HOST` at 20 MHz, SPI mode 0, a queue of 10 transfers, 16
+The bus is `SPI2_HOST` at 20 MHz, SPI mode 0, a queue of 10 transfers, 16
 bits per pixel in BGR order. The T-Dongle S3 landscape 160×80 format comes from
-``swap_xy(true)` + ``mirror(false, true)` + ``set_gap(1, 26)`,
+`swap_xy(true)` + `mirror(false, true)` + `set_gap(1, 26)`,
 matching the official LilyGO example. The backlight turns on with the GPIO low
 and off with the GPIO high.
 
@@ -130,14 +130,14 @@ rfsentinel/
 
 - The scanner runs in **its own FreeRTOS task** and is never blocked by the rest;
   the main task stack is raised to 6144 bytes.
-- ``store` is the **only** user of the filesystem; ``web` only serialises
+- `store` is the **only** user of the filesystem; `web` only serialises
   JSON and reads through bounded streams.
-- ``net` supplies UTC time **best effort**: NTP when the link allows it,
+- `net` supplies UTC time **best effort**: NTP when the link allows it,
   otherwise a stored reference plus uptime.
-- ``config` is loaded **once** into RAM (``app_config_t`) and written to
+- `config` is loaded **once** into RAM (`app_config_t`) and written to
   NVS sparingly.
-- The main loop in ``main.c` only calls ``net_tick()` and
-  ``display_tick()` every second, with a screen refresh every 5 s.
+- The main loop in `main.c` only calls `net_tick()` and
+  `display_tick()` every second, with a screen refresh every 5 s.
 
 ### 3.3 Design principles
 
@@ -147,11 +147,11 @@ rfsentinel/
    tick, upload and purge run in the background with an intermediate status.
 3. **Resilience to outages**: LittleFS, journal in files, gentle rotation.
    Nothing is destroyed on restart, the configuration survives in NVS.
-   ``format_if_mount_failed=false`: **no automatic formatting** if mounting
+   `format_if_mount_failed=false`: **no automatic formatting** if mounting
    fails, so a still-readable journal is never erased.
 4. **Limited flash writes**: NVS reserved for configuration, clock reference
    written at most once an hour, journal in 32 KB segments.
-5. **Minimal dependencies**: ESP-IDF + ``joltwallet/littlefs` (managed
+5. **Minimal dependencies**: ESP-IDF + `joltwallet/littlefs` (managed
    component, pinned version) + cJSON + NimBLE + esp_http_server +
    esp_http_client + esp-mqtt.
 6. **Secrets never exposed**: the WiGLE token, passwords and the Wi-Fi key never
@@ -167,25 +167,25 @@ rfsentinel/
 | # | Choice | Alternative rejected | Why |
 |---|---|---|---|
 | 1 | **ESP-IDF v5.3.2** | Arduino / PlatformIO | fine control of httpd, NimBLE, NVS and esp_lcd; reproducible build |
-| 2 | **LittleFS** (``joltwallet/littlefs` ==1.23.1) | SPIFFS | wear levelling, folders, clean deletes; pinned version = reproducible builds |
+| 2 | **LittleFS** (`joltwallet/littlefs` ==1.23.1) | SPIFFS | wear levelling, folders, clean deletes; pinned version = reproducible builds |
 | 3 | **Internal flash, no SD** | SD card with FatFs | pulling a card no longer destroys the journal; no connector, no jamming |
-| 4 | **Mount point ``/rfs`** | ``/sd` | no SD card any more; one explicit path |
+| 4 | **Mount point `/rfs`** | `/sd` | no SD card any more; one explicit path |
 | 5 | **Rotation by files and segments** | full wipe | you never lose everything; the oldest files leave one at a time |
 | 6 | **32 KB segments inside today's file** | one unbounded file per day | bounds how much history a rotation can take with it |
-| 7 | **100 % passive Wi-Fi scan** (``WIFI_SCAN_TYPE_PASSIVE`) | active scan | stealth, legality, no association, no emitted traffic |
-| 8 | **BLE through advertisements only** | GATT connection | observe without interacting; ``filter_duplicates=1` |
+| 7 | **100 % passive Wi-Fi scan** (`WIFI_SCAN_TYPE_PASSIVE`) | active scan | stealth, legality, no association, no emitted traffic |
+| 8 | **BLE through advertisements only** | GATT connection | observe without interacting; `filter_duplicates=1` |
 | 9 | **NimBLE central + observer** | observer only | hunting a nearby transmitter needs the central role; peripheral and broadcaster stay off |
 | 10 | **CSV `WigleWifi-1.6`** | proprietary format | the journal reloads into WiGLE as is, with no conversion |
 | 11 | **Manual WiGLE upload** | automatic upload | user control, quota, ethics |
 | 12 | **WiGLE lookup on the sensor** | direct call from the browser | the token never leaves the device |
 | 13 | **Hand-entered position + geocoding** | onboard GPS | the dongle has no GPS; address lookup avoids typing coordinates |
 | 14 | **Home-made `<canvas>` map + OSM tiles** | Leaflet | no external library to embed, falls back to a grid without Internet |
-| 15 | **Two separate RSSI thresholds** (``min_rssi`, ``mqtt_min_rssi`) | single threshold | a distant device can be recorded without triggering an alert |
+| 15 | **Two separate RSSI thresholds** (`min_rssi`, `mqtt_min_rssi`) | single threshold | a distant device can be recorded without triggering an alert |
 | 16 | **STA + rescue AP** | STA only | usable off-network; the AP starts if STA fails, **without interrupting scans** |
 | 17 | **NTP + stored reference** | raw timestamp | usable timestamps even offline, with an honest `ESTIMATED` quality |
 | 18 | **Time set from the browser** | no offline fallback | in AP-only mode no time source is reachable; quality stays `ESTIMATED`, without pretending NTP |
 | 19 | **NVS for configuration** | config file | atomicity, robustness, no dependency on the filesystem |
-| 20 | **Embedded UI** (``EMBED_FILES`) | external CDN | works in AP mode without Internet |
+| 20 | **Embedded UI** (`EMBED_FILES`) | external CDN | works in AP mode without Internet |
 | 21 | **Bilingual FR/EN + light and dark themes** | single language, single theme | the device is read outdoors as well as indoors |
 | 22 | **Session cookie + anti brute-force** | basic auth alone | the device must not be controllable by anyone on the network |
 | 23 | **Forced password change when still `admin/admin`** | default values accepted | basic hygiene |
@@ -198,13 +198,13 @@ rfsentinel/
 
 ## 5. Data model
 
-### 5.1 Observation (``s3_obs_t`, `store.h`)
+### 5.1 Observation (`s3_obs_t`, `store.h`)
 
 ```c
 typedef struct {
     char mac[18];     // "AA:BB:CC:DD:EE:FF" (Wi-Fi BSSID or BLE BDADDR)
     char ssid[33];    // Wi-Fi SSID or BLE name (may be empty)
-    char auth[16];    // "Open", "WPA2", "WPA3", "BLE"…
+    char auth[16];    // Wi-Fi: "Open", "WPA2"… / BLE: address type
     char ts[20];      // "YYYY-MM-DD HH:MM:SS" in UTC
     int  channel;     // Wi-Fi channel (0 for BLE)
     int  freq;        // kHz (2412..2472 for Wi-Fi, 0 for BLE)
@@ -222,16 +222,30 @@ One line per observation, in the field order of the WiGLE format: MAC, SSID
 and longitude, manufacturer, then `WIFI` or `BLE` as the last column. Fields the
 sensor cannot know stay empty.
 
+For BLE, the `auth` field carries the **address type**: `BLE-PUBLIC`, `BLE-STATIC`,
+`BLE-RPA`, `BLE-NRPA` or `BLE-UNKNOWN`. It is written in the `RCOIs` column
+of the journal file, never in the `Type` column, which keeps `BLE` and still reads as a
+standard WiGLE CSV. That internal marker is stripped on export (§5.3), so the
+downloaded file only shows WiGLE fields.
+
+The type comes from `main/ble_address.h`, which sorts every address it meets into
+`PUBLIC`, `STATIC`, `RPA`, `NRPA` or `UNKNOWN`. Addresses arrive least
+significant byte first; NimBLE type 0 or 2, a public address or a resolved
+public identity, gives `PUBLIC`. For type 1, a random address, the two most
+significant bits of `addr[5]` decide: `0xc0` static, `0x40` RPA, `0x00` NRPA. A type 3
+whose bits do not announce a static address, or an unrecognised type, falls
+back to `UNKNOWN`.
+
 ### 5.3 Journal (`store.c`)
 
 - One file **per day**: `/rfs/observations/obs_YYYYMMDD.csv`, with the WiGLE
   header on the first line.
-- Today's file is split into **32 KB segments** (``RFS_SEGMENT_MAX_BYTES`): a
+- Today's file is split into **32 KB segments** (`RFS_SEGMENT_MAX_BYTES`): a
   rotation never takes more than one segment, so at most 32 KB of history.
 - A new segment also opens when the **timestamp quality changes**, so that reliable
   times and estimated times never mix inside one segment.
-- **Circular rotation**: past ``RFS_USAGE_LIMIT_PCT` (90 % of the partition),
-  the oldest files leave **one at a time**; a cap of ``RFS_OBS_MAX_FILES` (32)
+- **Circular rotation**: past `RFS_USAGE_LIMIT_PCT` (90 % of the partition),
+  the oldest files leave **one at a time**; a cap of `RFS_OBS_MAX_FILES` (32)
   files also bounds growth. Never a full format, and **scanning never stops**
   because the journal is full.
 - **De-duplication**: a `s_seen` table of 128 MACs in RAM; a device becomes
@@ -242,34 +256,51 @@ sensor cannot know stay empty.
   `type`, ascending or descending, with a time-range filter.
 - **Export**: sequential read of every segment into a single CSV stream in WiGLE
   format, without ever loading the journal into memory.
+  The BLE address filter (§5.2) applies at read time: lines whose address type is
+  excluded by the setting never leave the file, and the internal marker written in
+  the `RCOIs` column is stripped, so the export only shows WiGLE fields. A BLE line
+  recorded before the marker existed carries an unknown type: it passes in « All »
+  mode and disappears in the other two.
+- **Export length**: the HTTP answer is a `multipart` whose length has to be
+  announced before the first byte. `store_export_open()` therefore walks the
+  filtered journal once to count the bytes, then puts the cursor back at zero.
+  The two passes read the same frozen copy of the journal; if a rotation happens
+  between them, the read stops on `ESP_ERR_INVALID_STATE` rather than serving a
+  file whose length would not match the header.
 
 ### 5.4 Configuration (`config.h`, in NVS)
 
-``app_config_t` groups: Wi-Fi (SSID and key), WebUI (user and password), WiGLE
+`app_config_t` groups: Wi-Fi (SSID and key), WebUI (user and password), WiGLE
 (API name and token), rescue AP (SSID and password), latitude/longitude,
-``min_rssi`, ``mqtt_min_rssi`, ``rediscover_min`, ``scan_wifi`,
-``scan_ble`, ``scan_autostart`, ``ui_lang`, MQTT (enable, broker, port,
+`min_rssi`, `mqtt_min_rssi`, `rediscover_min`, `scan_wifi`,
+`scan_ble`, `ble_address_filter`, `scan_autostart`, `ui_lang`, MQTT (enable,
+broker, port,
 user, password, topic, client id, TLS), NTP (server and timezone) and
-``device_id`.
+`device_id`.
 
 Rules:
 
-- ``config_needs_password_change()` returns true while the credentials are still
+- `config_needs_password_change()` returns true while the credentials are still
   `admin`/`admin`; the interface then forces the change.
-- ``config_has_password()`, ``config_has_token()` and
-  ``config_has_ap_password()` return booleans only, **never the value**.
+- `config_has_password()`, `config_has_token()` and
+  `config_has_ap_password()` return booleans only, **never the value**.
 - The WiGLE token is never read back by the interface after saving: six sensitive
   fields show eight dots, and an eye icon lets you replace them, never recover them.
-- ``config_save_time_ref()` limits the clock-reference write to once an hour to
+- `config_save_time_ref()` limits the clock-reference write to once an hour to
   spare the flash.
+- `ble_address_filter` (NVS key `ble_filter`, unsigned byte, default « stable »)
+  decides which BLE addresses the journal keeps and which ones the export lets
+  through: 0 all, 1 public and static random, 2 public only. A value out of range
+  read back from NVS falls back to the default at load time, and
+  `config_set_ble_address_filter()` refuses anything above 2.
 
 ---
 
 
 ## 6. Web API (`web.c`)
 
-``esp_http_server`, JSON responses through cJSON. ``httpd_start` returns an
-``esp_err_t` that **is checked**, and `max_uri_handlers` is sized to 29 for the
+`esp_http_server`, JSON responses through cJSON. `httpd_start` returns an
+`esp_err_t` that **is checked**, and `max_uri_handlers` is sized to 29 for the
 28 handlers spread over 27 routes.
 
 Every route requires a session except `/api/login`. The session is a `sid` cookie
@@ -310,8 +341,16 @@ lockout.
 
 Useful details:
 
-- `/api/observations` returns 10 rows per page; a `type` other than `wifi` or
+- `/api/observations` returns 14 rows per page; a `type` other than `wifi` or
   `ble` is rejected with `bad_type`.
+- `/api/config` accepts `ble_address_filter` (0, 1 or 2) and returns it on read.
+  A value that is not a whole number, is negative or is above 2 answers `400` with
+  `ble_filter_invalid`; a failure to store it in NVS answers `500` with
+  `ble_filter_save_failed`. Either way the previous setting stays in place.
+- `/api/scan/status` adds five BLE diagnostic counters — `ble_public`,
+  `ble_static`, `ble_rpa`, `ble_nrpa`, `ble_unknown` — which count the addresses
+  met since start-up, **before** filtering: they therefore show the volume of
+  temporary addresses the setting keeps out of the journal.
 - `/api/export` requires `from` and `to` as epoch seconds, refuses invalid or
   inverted bounds, and answers `text/csv` with `Content-Disposition: attachment`
   and `Cache-Control: no-store`.
@@ -339,8 +378,10 @@ Views and cards:
   during the anti brute-force lockout.
 - **Status** — network mode, IP, version, local time with UTC in a tooltip, last
   synchronisation, Wi-Fi and BLE counters really read from the journal, storage
-  usage, MQTT state, scan diagnostics, time-set button.
-- **Observations** — paginated list of 10 rows, column sorting, Wi-Fi/BLE filter,
+  usage, MQTT state, scan diagnostics, time-set button, and a line giving the
+  breakdown of BLE addresses since start-up — public, static, RPA, NRPA and
+  unknown.
+- **Observations** — paginated list of 14 rows, column sorting, Wi-Fi/BLE filter,
   date-range filter in local time, clickable rows.
 - **Device history** — presences known to WiGLE for the clicked MAC, in
   chronological order, with a point on the map to the right.
@@ -351,8 +392,11 @@ Views and cards:
   correction by latitude, accuracy circle around the selected point, rescaling to
   the displayed size and screen density.
 - **Configuration** — Wi-Fi, rescue AP, position, thresholds, scan options,
-  language, WiGLE, MQTT, NTP, timezone and device identifier. The six sensitive
-  fields are masked, with an eye icon to replace them.
+  language, WiGLE, MQTT, NTP, timezone and device identifier. A « BLE addresses »
+  selector picks the filter applied to the journal and to the exports — All,
+  Stable (default), Public only — with a help line reminding that old BLE lines
+  without a type stay excluded from filtered exports. The six sensitive fields
+  are masked, with an eye icon to replace them.
 - **Geocoding** — address lookup against the French national address base
   (`https://data.geopf.fr/geocodage/search`) to fill latitude and longitude.
 - **Export** — download of the whole journal or of a range, as WiGLE CSV ready to
@@ -378,8 +422,8 @@ what makes it work in AP mode without Internet, on the fallback grid.
 
 - `esp-mqtt`; broker, port, user, password, topic, client id and TLS configurable.
   Started at boot, not only after saving the configuration.
-- ``mqtt_on_obs(obs)` is called by the scanner **after recording**. It filters on
-  ``mqtt_min_rssi`, applies de-duplication with ``rediscover_min`, then
+- `mqtt_on_obs(obs)` is called by the scanner **after recording**. It filters on
+  `mqtt_min_rssi`, applies de-duplication with `rediscover_min`, then
   publishes at **QoS 1, no retain**.
 - Checking and publishing happen inside the same critical section, because BLE
   callbacks and the Wi-Fi task arrive in parallel.
@@ -403,15 +447,15 @@ and `UNKNOWN` when the device has no idea of the time, in which case `ts` is
 NVS namespace (`rfs_presence`). Watching is independent of the recording thresholds
 and of the exclusion list:
 
-- on the Wi-Fi side, ``presence_on_obs()` is called **before** the exclusion test
+- on the Wi-Fi side, `presence_on_obs()` is called **before** the exclusion test
   and before any signal filtering;
-- on the BLE side, ``presence_matches()` is consulted before the filters,
+- on the BLE side, `presence_matches()` is consulted before the filters,
   otherwise a watched device would be dropped for a weak signal; the observation is
   then forwarded even when it is not journalled;
 - the first reading triggers an alert whatever the signal level; a return alert is
   only sent after an absence of at least `absence_s` (120 s by default, 30 s
   minimum), with a new attempt at most every 5 s;
-- ``mqtt_presence_publish()` publishes at QoS 1 on a dedicated topic, never the
+- `mqtt_presence_publish()` publishes at QoS 1 on a dedicated topic, never the
   alerts topic: the configuration refuses both names being identical.
 
 Payload, capped at 512 bytes:
@@ -537,7 +581,7 @@ journal, which can be read or uploaded later.
 
 ### 10.2 Non-blocking loop
 
-``net_tick()` is called regularly by the main loop. It advances the network state
+`net_tick()` is called regularly by the main loop. It advances the network state
 in small steps — one connection attempt, one timeout check, one NTP request — without
 ever blocking. A slow Wi-Fi association or an unreachable NTP server therefore
 suspends neither the screen, nor the interface, nor the scans.
@@ -591,7 +635,7 @@ see §11.5.
 
 The board's controller is configured with `swap_xy(true)`, `mirror(false, true)` and
 an offset of 26 pixels in X and 1 in Y, which presents the image turned by 180°
-relative to the reference used by the drawing code. ``rotate_frame()` flips the
+relative to the reference used by the drawing code. `rotate_frame()` flips the
 framebuffer before sending. Practical consequence: the coordinates used by the
 drawing code are the coordinates visible on screen.
 
@@ -619,10 +663,10 @@ an active-low pin.
 
 ### 11.5 Screen off and memory recovered
 
-``display_tick()` compares the clock against the boot time and calls
-``display_blank()` as soon as `RFS_BOOT_HOLD_MS` has elapsed, that is **one
-minute** after power-on. ``display_blank()` switches the panel off
-(`disp_on_off(false)`), raises the backlight pin, then ``release_frame()` frees
+`display_tick()` compares the clock against the boot time and calls
+`display_blank()` as soon as `RFS_BOOT_HOLD_MS` has elapsed, that is **one
+minute** after power-on. `display_blank()` switches the panel off
+(`disp_on_off(false)`), raises the backlight pin, then `release_frame()` frees
 the framebuffer and sets the pointer back to `NULL`. The release only happens after
 the SPI transfer in progress has finished, so a buffer is never returned during a DMA
 write.
@@ -786,7 +830,7 @@ node tests/test_webtool_ui.js    # md5, manifest, 8/16 MB check, progress
 
 | File | Size | SHA-256 |
 |---|---|---|
-| `rfsentinel.bin` | 1,477,360 B | `c941ce1609143e41caa2b0b97972588a19b94f421c2b8fd5329a90a2b829d3f7` |
+| `rfsentinel.bin` | 1,481,408 B | `21a843ad6ec9300d710d665558475adf86aceeba4d0947dc04ba5ef23c94b930` |
 | `bootloader.bin` | 21,648 B | `f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297` |
 | `partition-table.bin` | 3,072 B | `4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913` |
 
@@ -945,33 +989,40 @@ The French versions of both documents live in `docs/fr/` and carry the same cont
 
 ### 17.2 Host-side tests
 
-The `tests/` folder holds twenty-six standalone programs, run on the development
-machine without ESP-IDF and without hardware: eighteen in Python, seven in JavaScript
-through Node, one in C. They cover the logic that does not need the board: CSV export
+The `tests/` folder holds twenty-nine standalone programs, run on the development
+machine without ESP-IDF and without hardware: nineteen in Python, eight in JavaScript
+through Node, two in C. They cover the logic that does not need the board: CSV export
 format, sorting and filtering, time conversions and formatting bounds, recording and
 MQTT alert thresholds, de-duplication, watched devices from every angle — API, logic,
 MQTT payload, interface —, recounting, concurrent access to the journal, iteration
 over a fragmented LittleFS, WiGLE searches in list mode, in summary and in TLS,
-reading of the export, and two programs that compile a piece of the firmware on the
-host: `test_display_lifecycle_host.py` replays the switch-off toggle with a simulated
+reading of the export, classification and filtering of BLE addresses, and three
+programs that compile a piece of the firmware on the host:
+`test_display_lifecycle_host.py` replays the switch-off toggle with a simulated
 DMA transfer and checks the framebuffer is only returned once that transfer finished
 (§11.5); `test_wigle_memory_host.py` runs the real WiGLE search code with simulated
-HTTPS and failing allocations, to check every block is released on early exits.
+HTTPS and failing allocations, to check every block is released on early exits;
+`test_ble_config_host.py` runs the real BLE filter setter against a simulated NVS,
+both on success and on a failed write.
 
 ```bash
 for t in tests/test_*.py; do python3 "$t"; done
 for t in tests/test_*.js; do node "$t"; done
+
+cc -Imain tests/test_ble_address.c -o /tmp/bleaddr && /tmp/bleaddr
 
 LFS=managed_components/joltwallet__littlefs/src/littlefs
 cc -I"$LFS" tests/test_littlefs_iter_host.c "$LFS/lfs.c" "$LFS/lfs_util.c" \
    -o /tmp/lfs_iter && /tmp/lfs_iter
 ```
 
-The Python and JavaScript programs run as they are, with no external dependency. The
-C one compiles against the LittleFS library fetched by ESP-IDF, hence the `-I` on the
-components folder; that compilation has to come after an `idf.py reconfigure`, the
-only thing able to create the folder. There is no single orchestrator in the
-repository: each program prints what it checks and exits non-zero on failure.
+The Python and JavaScript programs run as they are, with no external dependency.
+`test_ble_address.c` compiles with a plain `-Imain`, since classifying an address
+has no ESP dependency. The other one compiles against the LittleFS library fetched
+by ESP-IDF, hence the `-I` on the components folder; that compilation has to come
+after an `idf.py reconfigure`, the only thing able to create the folder. There is
+no single orchestrator in the repository: each program prints what it checks and
+exits non-zero on failure.
 
 These tests prove nothing about the radio, the screen or the filesystem: they cover
 data processing, not the target.
@@ -1073,6 +1124,8 @@ Every value below is read from the code, with the name it carries there.
 | `CALIBRATION_TIMEOUT_MS` | 15 min | `main/scanner.c` |
 | `SCANNER_FIND_MAX` | 48 | `main/scanner.h` |
 | Scan mode | passive, `filter_duplicates=1` | `main/scanner.c` |
+| BLE address filter | 0 all, 1 stable, 2 public | `main/ble_address.h` |
+| BLE diagnostics | 5 counters, saturate at 4,294,967,295 | `main/scanner.c` |
 
 ### 18.3 Journal and data
 
@@ -1084,7 +1137,7 @@ Every value below is read from the code, with the name it carries there.
 | `RFS_OBS_MAX_FILES` | 32 files | `main/store.c` |
 | `RFS_SEGMENT_MAX_BYTES` | 32,768 B | `main/store.c` |
 | `RFS_LINE_MAX` | 256 B | `main/store.c` |
-| `RFS_LIST_PAGE` | 10 rows per page | `main/store.c` |
+| `RFS_LIST_PAGE` | 14 rows per page | `main/store.c` |
 | `RFS_SORT_MAX` | `RFS_LIST_PAGE + 1` | `main/store.c` |
 | `RFS_HIST_MAX` | 10 entries | `main/store.c` |
 | `RFS_USAGE_LIMIT_PCT` | 90 % | `main/store.c` |
@@ -1162,6 +1215,7 @@ These apply until the user changes something.
 | MQTT alert threshold | -60 dBm |
 | Rediscovery delay | 60 min |
 | Wi-Fi scan, BLE scan, automatic start | enabled |
+| BLE address filter | stable: public and static random |
 | Language | French |
 | MQTT | disabled, port 1883, no TLS |
 | Device identifier | `rfsentinel-01` |
@@ -1195,7 +1249,8 @@ into the next version.
 | `main/version.h` | version number |
 | `main/config.c` | settings persisted in non-volatile storage |
 | `main/store.c` | journal on the board, list, sort, filters, purge, blacklist |
-| `main/scanner.c` | Wi-Fi and BLE scans, calibration |
+| `main/scanner.c` | Wi-Fi and BLE scans, calibration, BLE address counters |
+| `main/ble_address.h` | BLE address classification and filtering |
 | `main/net.c` | connection, rescue access point, NTP, local time |
 | `main/auth.c` | sessions, lockout after failures |
 | `main/web.c` | HTTP routes, pages, API, export |

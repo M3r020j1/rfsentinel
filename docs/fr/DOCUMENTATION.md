@@ -203,7 +203,7 @@ rfsentinel/
 typedef struct {
     char mac[18];     // "AA:BB:CC:DD:EE:FF" (BSSID Wi-Fi ou BDADDR BLE)
     char ssid[33];    // SSID Wi-Fi ou nom BLE (peut être vide)
-    char auth[16];    // "Open", "WPA2", "WPA3", "BLE"…
+    char auth[16];    // Wi-Fi : "Open", "WPA2"… / BLE : type d'adresse
     char ts[20];      // "YYYY-MM-DD HH:MM:SS" en UTC
     int  channel;     // canal Wi-Fi (0 pour BLE)
     int  freq;        // kHz (2412..2472 en Wi-Fi, 0 pour BLE)
@@ -220,6 +220,20 @@ Une ligne par observation, dans l'ordre des champs du format WiGLE : MAC, SSID
 (échappé), verrouillage, heure UTC, canal, radio (24 GHz), force, latitude et
 longitude configurées, fabricant, puis le type `WIFI` ou `BLE` en dernière
 colonne. Les champs que le capteur ne peut pas connaître restent vides.
+
+Pour le BLE, le champ `auth` sert à noter le **type d'adresse** : `BLE-PUBLIC`,
+`BLE-STATIC`, `BLE-RPA`, `BLE-NRPA` ou `BLE-UNKNOWN`. Il s'écrit dans la colonne
+`RCOIs` du fichier journal, jamais dans la colonne `Type`, qui garde `BLE` et continue
+de se lire comme un CSV WiGLE standard. Ce marqueur interne est retiré à l'export
+(§5.3) : le fichier téléchargé ne présente que des champs WiGLE.
+
+Le type vient de `main/ble_address.h`, qui range chaque adresse rencontrée en
+`PUBLIC`, `STATIC`, `RPA`, `NRPA` ou `UNKNOWN`. Les adresses arrivent en poids
+faible d'abord ; un type NimBLE 0 ou 2 — adresse publique, ou identité publique
+résolue — donne `PUBLIC`. Pour un type 1, adresse aléatoire, les deux bits de
+poids fort de `addr[5]` décident : `0xc0` statique, `0x40` RPA, `0x00` NRPA. Un
+type 3 dont ces bits n'annoncent pas une adresse statique, ou un type non
+reconnu, tombe en `UNKNOWN`.
 
 ### 5.3 Journal (`store.c`)
 
@@ -243,15 +257,28 @@ colonne. Les champs que le capteur ne peut pas connaître restent vides.
   `type`, en sens croissant ou décroissant, avec filtre par plage horaire.
 - **Export** : lecture séquentielle de tous les segments dans un seul flux CSV au
   format WiGLE, sans jamais charger le journal en mémoire.
+  Le filtre sur les adresses BLE (§5.2) s'applique à la lecture : les lignes dont
+  le type d'adresse est exclu par le réglage ne sortent pas dans le fichier, et le
+  marqueur interne écrit en colonne `RCOIs` est retiré, pour que l'export ne
+  présente que des champs WiGLE. Une ligne BLE enregistrée avant l'apparition du
+  marqueur a un type inconnu : elle passe en mode « Toutes » et disparaît dans les
+  deux autres.
+- **Longueur de l'export** : la réponse HTTP est un `multipart` dont la longueur
+  doit être annoncée avant le premier octet. `store_export_open()` parcourt donc
+  une première fois le journal filtré pour compter les octets, puis remet le
+  curseur à zéro. Les deux passes lisent la même copie figée du journal ; si une
+  rotation intervient entre elles, la lecture s'arrête sur
+  `ESP_ERR_INVALID_STATE` plutôt que de servir un fichier dont la longueur ne
+  correspondrait pas à l'en-tête.
 
 ### 5.4 Configuration (`config.h`, en NVS)
 
 `app_config_t` regroupe : Wi-Fi (SSID et clé), WebUI (utilisateur et mot de
 passe), WiGLE (nom d'API et token), AP de secours (SSID et mot de passe),
 latitude/longitude, `min_rssi`, `mqtt_min_rssi`, `rediscover_min`,
-`scan_wifi`, `scan_ble`, `scan_autostart`, `ui_lang`, MQTT (activation,
-broker, port, utilisateur, mot de passe, sujet, identifiant, TLS), NTP (serveur et
-fuseau) et `device_id`.
+`scan_wifi`, `scan_ble`, `ble_address_filter`, `scan_autostart`, `ui_lang`,
+MQTT (activation, broker, port, utilisateur, mot de passe, sujet, identifiant,
+TLS), NTP (serveur et fuseau) et `device_id`.
 
 Règles :
 
@@ -264,6 +291,11 @@ Règles :
   de les retrouver.
 - `config_save_time_ref()` limite l'écriture de la référence d'horloge à une fois
   par heure pour ménager la flash.
+- `ble_address_filter` (clé NVS `ble_filter`, octet non signé, défaut « stables »)
+  décide quelles adresses BLE le journal garde et lesquelles l'export laisse passer
+  : 0 toutes, 1 publiques et aléatoires statiques, 2 publiques seules. Une valeur
+  hors plage relue en NVS revient au défaut au chargement, et
+  `config_set_ble_address_filter()` refuse ce qui dépasse 2.
 
 ---
 
@@ -311,8 +343,16 @@ temporisation de 30 s.
 
 Détails utiles :
 
-- `/api/observations` renvoie 10 lignes par page ; un `type` autre que `wifi` ou
+- `/api/observations` renvoie 14 lignes par page ; un `type` autre que `wifi` ou
   `ble` est refusé par `bad_type`.
+- `/api/config` accepte `ble_address_filter` (0, 1 ou 2) et le renvoie en lecture.
+  Une valeur non entière, négative ou supérieure à 2 répond `400` avec
+  `ble_filter_invalid` ; un échec d'enregistrement en NVS répond `500` avec
+  `ble_filter_save_failed`. Dans les deux cas le réglage précédent reste en place.
+- `/api/scan/status` ajoute cinq compteurs de diagnostic BLE — `ble_public`,
+  `ble_static`, `ble_rpa`, `ble_nrpa`, `ble_unknown` — qui comptent les adresses
+  rencontrées depuis le démarrage, **avant** filtrage : ils font donc voir le
+  volume d'adresses temporaires que le réglage écarte du journal.
 - `/api/export` exige `from` et `to` en epoch, refuse les bornes invalides ou
   inversées, et répond en `text/csv` avec `Content-Disposition: attachment` et
   `Cache-Control: no-store`.
@@ -341,9 +381,10 @@ Vues et cartes :
   lancement, message explicite pendant la temporisation anti-force-brute.
 - **État** — mode réseau, IP, version, heure locale avec l'UTC en infobulle,
   dernière synchronisation, compteurs Wi-Fi et BLE réellement lus dans le journal,
-  occupation du stockage, état MQTT, diagnostics de scan, bouton de réglage de
-  l'heure.
-- **Observations** — liste paginée de 10 lignes, tri par colonne, filtre Wi-Fi/BLE,
+  ligne de répartition des adresses BLE depuis le démarrage — publiques,
+  statiques, RPA, NRPA et inconnues —, occupation du stockage, état MQTT,
+  diagnostics de scan, bouton de réglage de l'heure.
+- **Observations** — liste paginée de 14 lignes, tri par colonne, filtre Wi-Fi/BLE,
   filtre par plage de dates en heure locale, ligne cliquable.
 - **Historique de l'équipement** — présences connues de WiGLE pour la MAC cliquée,
   dans l'ordre chronologique, avec un point sur la carte à droite.
@@ -355,8 +396,11 @@ Vues et cartes :
   longitude selon la latitude, cercle de précision autour du point sélectionné,
   recalage sur la taille affichée et la densité de l'écran.
 - **Configuration** — Wi-Fi, AP de secours, position, seuils, options de scan,
-  langue, WiGLE, MQTT, NTP, fuseau et identifiant d'appareil. Les six champs
-  sensibles sont masqués, avec un œil pour les remplacer.
+  langue, WiGLE, MQTT, NTP, fuseau et identifiant d'appareil. Un sélecteur
+  « Adresses BLE » choisit le filtre appliqué au journal et aux exports —
+  Toutes, Stables par défaut, Publiques uniquement —, avec une ligne d'aide qui
+  rappelle que les anciennes lignes BLE sans type restent exclues des exports
+  filtrés. Les six champs sensibles sont masqués, avec un œil pour les remplacer.
 - **Géocodage** — recherche d'adresse vers la base adresse nationale
   (`https://data.geopf.fr/geocodage/search`) pour remplir latitude et longitude.
 - **Export** — téléchargement de tout le journal ou d'une plage, en CSV WiGLE prêt
@@ -767,7 +811,7 @@ node tests/test_webtool_ui.js    # md5, manifeste, contrôle 8/16 Mo, progressio
 
 | Fichier | Taille | SHA-256 |
 |---|---|---|
-| `rfsentinel.bin` | 1 477 360 o | `c941ce1609143e41caa2b0b97972588a19b94f421c2b8fd5329a90a2b829d3f7` |
+| `rfsentinel.bin` | 1 481 408 o | `21a843ad6ec9300d710d665558475adf86aceeba4d0947dc04ba5ef23c94b930` |
 | `bootloader.bin` | 21 648 o | `f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297` |
 | `partition-table.bin` | 3 072 o | `4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913` |
 
@@ -932,24 +976,28 @@ la configuration ; ils agissent dès le scan suivant.
 
 ### 17.2 Tests sur machine
 
-Le dossier `tests/` contient vingt-six programmes autonomes, exécutés sur la machine
-de développement sans ESP-IDF ni matériel : dix-huit en Python, sept en JavaScript
-passé par Node, un en C. Ils portent sur la logique qui n'a pas besoin de la carte :
+Le dossier `tests/` contient vingt-neuf programmes autonomes, exécutés sur la machine
+de développement sans ESP-IDF ni matériel : dix-neuf en Python, huit en JavaScript
+passé par Node, deux en C. Ils portent sur la logique qui n'a pas besoin de la carte :
 format de l'export CSV, tri et filtres, conversions de temps et bornes de
 formatage, seuils d'enregistrement et d'alerte MQTT, déduplication, équipements
 surveillés sous toutes leurs coutures — API, logique, charge utile MQTT, interface —,
 recomptage, accès concurrents au journal, itération sur un LittleFS fragmenté,
-recherches WiGLE en lecture, en résumé et en TLS, lecture de l'export, et deux
-programmes qui compilent un morceau du firmware sur l'hôte :
+recherches WiGLE en lecture, en résumé et en TLS, lecture de l'export, classification
+et filtrage des adresses BLE, et trois programmes qui compilent un morceau du
+firmware sur l'hôte :
 `test_display_lifecycle_host.py` rejoue la bascule d'extinction avec un transfert
 DMA simulé et vérifie que le framebuffer n'est rendu qu'une fois ce transfert terminé
 (§11.5) ; `test_wigle_memory_host.py` exécute le vrai code de recherche WiGLE avec
 un HTTPS simulé et des allocations en échec, pour vérifier que tous les blocs sont
-libérés sur les sorties anticipées.
+libérés sur les sorties anticipées ; `test_ble_config_host.py` exécute la vraie fonction
+de réglage du filtre BLE avec une NVS simulée, en succès comme en échec d'écriture.
 
 ```bash
 for t in tests/test_*.py; do python3 "$t"; done
 for t in tests/test_*.js; do node "$t"; done
+
+cc -Imain tests/test_ble_address.c -o /tmp/bleaddr && /tmp/bleaddr
 
 LFS=managed_components/joltwallet__littlefs/src/littlefs
 cc -I"$LFS" tests/test_littlefs_iter_host.c "$LFS/lfs.c" "$LFS/lfs_util.c" \
@@ -957,11 +1005,13 @@ cc -I"$LFS" tests/test_littlefs_iter_host.c "$LFS/lfs.c" "$LFS/lfs_util.c" \
 ```
 
 Les programmes Python et JavaScript se lancent tels quels, sans dépendance
-extérieure. Celui en C se compile contre la bibliothèque LittleFS récupérée par
-ESP-IDF, d'où le `-I` sur le dossier de composants ; la compilation doit intervenir
-après un `idf.py reconfigure`, seul capable de créer ce dossier. Il n'y a pas
-d'orchestrateur unique dans le dépôt : chaque programme affiche ce qu'il vérifie et
-sort avec un code non nul en cas d'échec.
+extérieure. `test_ble_address.c` se compile avec un simple `-Imain`, la classification
+des adresses n'ayant aucune dépendance ESP. L'autre se compile contre la
+bibliothèque LittleFS récupérée par ESP-IDF, d'où le `-I` sur le dossier de
+composants ; la compilation doit intervenir après un `idf.py reconfigure`, seul
+capable de créer ce dossier. Il n'y a pas d'orchestrateur unique dans le dépôt :
+chaque programme affiche ce qu'il vérifie et sort avec un code non nul en cas
+d'échec.
 
 Ces tests ne prouvent rien sur la radio, l'écran ou le système de fichiers : ils
 couvrent le traitement des données, pas la cible.
@@ -1064,6 +1114,8 @@ Toutes les valeurs ci-dessous sont lues dans le code, avec le nom qui les porte.
 | `CALIBRATION_TIMEOUT_MS` | 15 min | `main/scanner.c` |
 | `SCANNER_FIND_MAX` | 48 | `main/scanner.h` |
 | Mode de scan | passif, `filter_duplicates=1` | `main/scanner.c` |
+| Filtre des adresses BLE | 0 toutes, 1 stables, 2 publiques | `main/ble_address.h` |
+| Diagnostic BLE | 5 compteurs, saturation à 4 294 967 295 | `main/scanner.c` |
 
 ### 18.3 Journal et données
 
@@ -1075,7 +1127,7 @@ Toutes les valeurs ci-dessous sont lues dans le code, avec le nom qui les porte.
 | `RFS_OBS_MAX_FILES` | 32 fichiers | `main/store.c` |
 | `RFS_SEGMENT_MAX_BYTES` | 32 768 o | `main/store.c` |
 | `RFS_LINE_MAX` | 256 o | `main/store.c` |
-| `RFS_LIST_PAGE` | 10 lignes par page | `main/store.c` |
+| `RFS_LIST_PAGE` | 14 lignes par page | `main/store.c` |
 | `RFS_SORT_MAX` | `RFS_LIST_PAGE + 1` | `main/store.c` |
 | `RFS_HIST_MAX` | 10 entrées | `main/store.c` |
 | `RFS_USAGE_LIMIT_PCT` | 90 % | `main/store.c` |
@@ -1153,6 +1205,7 @@ Ces valeurs s'appliquent tant que l'utilisateur n'a rien changé.
 | Seuil d'alerte MQTT | -60 dBm |
 | Délai de redécouverte | 60 min |
 | Scan Wi-Fi, scan BLE, démarrage automatique | actives |
+| Filtre des adresses BLE | stables : publiques et aléatoires statiques |
 | Langue | français |
 | MQTT | désactivé, port 1883, sans TLS |
 | Identifiant de l'appareil | `rfsentinel-01` |
@@ -1186,7 +1239,8 @@ corrections vont dans la version suivante.
 | `main/version.h` | numéro de version |
 | `main/config.c` | réglages persistes en mémoire non volatile |
 | `main/store.c` | journal sur carte, liste, tri, filtres, purge, liste noire |
-| `main/scanner.c` | scans Wi-Fi et BLE, calibration |
+| `main/scanner.c` | scans Wi-Fi et BLE, calibration, compteurs d'adresses BLE |
+| `main/ble_address.h` | classification et filtrage des adresses BLE |
 | `main/net.c` | connexion, point d'accès de secours, NTP, heure locale |
 | `main/auth.c` | sessions, verrouillage après échecs |
 | `main/web.c` | routes HTTP, pages, API, export |

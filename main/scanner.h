@@ -60,6 +60,8 @@ typedef struct {
     int64_t completed_us;
 } scanner_wifi_diagnostics_t;
 void scanner_get_wifi_diagnostics(scanner_wifi_diagnostics_t *out);
+typedef struct { uint32_t public_count, static_count, rpa_count, nrpa_count, unknown_count; } scanner_ble_diagnostics_t;
+void scanner_get_ble_diagnostics(scanner_ble_diagnostics_t *out);
 
 /* true si le stack BLE est operationnel. */
 bool scanner_ble_available(void);

@@ -20,7 +20,7 @@ static void *writer(void*unused){
  (void)unused;while(!atomic_load(&go))sched_yield();
  for(int i=0;i<300;i++){
   xSemaphoreTake(s_store_lock,0);char p[180];snprintf(p,sizeof(p),"%s/%s",test_dir,s_segment_name);
-  FILE*f=fopen(p,"a");assert(f);assert(fputs("NEW_RECORD\n",f)>=0);fclose(f);
+  FILE*f=fopen(p,"a");assert(f);assert(fputs("NEW_RECORD,x,auth,2024-02-29 00:00:00,1,2,3,4,5,6,7,,9,WIFI\n",f)>=0);fclose(f);
   atomic_fetch_add(&writes,1);xSemaphoreGive(s_store_lock);sched_yield();
  }
  return NULL;
@@ -35,7 +35,7 @@ int main(int argc,char**argv){
  for(int i=1;i<=120;i++){
   char p[180];snprintf(p,sizeof(p),"%s/obs_s%010d_N.csv",test_dir,i);
   FILE*f=fopen(p,"w");assert(f);fputs(CSV_HDR,f);
-  for(int j=0;j<200;j++)fprintf(f,"record%03d_%03d\n",i,j);fclose(f);
+  for(int j=0;j<200;j++)fprintf(f,"record%03d_%03d,x,auth,2024-02-29 00:00:00,1,2,3,4,5,6,7,,9,WIFI\n",i,j);fclose(f);
  }
  store_export_t*h=NULL;assert(store_export_open(&h)==ESP_OK);long expected=store_export_size(h),total=0;
  char buf[1024];char *snapshot=malloc((size_t)expected+1);assert(snapshot);size_t got;pthread_t t;assert(pthread_create(&t,NULL,writer,NULL)==0);

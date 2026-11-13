@@ -57,6 +57,8 @@ static bool fail_alloc;
 static void *test_calloc(size_t n,size_t size){return fail_alloc ? NULL : calloc(n,size);}
 #define calloc test_calloc
 '''
+code += (Path(__file__).resolve().parents[1] / 'main/ble_address.h').read_text().replace('#pragma once', '')
+code += '\ntypedef struct { uint8_t ble_address_filter; } test_config_t; static test_config_t test_config; static const test_config_t *config_get(void) { (void)rfs_ble_classify; return &test_config; }\n'
 code += function('static bool segment_number(') + '\n'
 code += function('static bool obs_file(') + '\n'
 code += function('static time_t rfs_timegm(') + '\n'
@@ -94,7 +96,7 @@ static void make_file(int i) {
     char path[256];
     snprintf(path,sizeof(path),"%s/obs_s%010d_N.csv",test_dir,i);
     FILE *f=fopen(path,"w"); assert(f);
-    fputs(CSV_HDR,f); fprintf(f,"row%04d\n",i); assert(fclose(f)==0);
+    fputs(CSV_HDR,f); fprintf(f,"row%04d,x,auth,2024-02-29 00:00:00,1,2,3,4,5,6,7,,9,WIFI\n",i); assert(fclose(f)==0);
 }
 int main(int argc, char **argv) {
     assert(argc==2); test_dir=argv[1];
@@ -121,14 +123,34 @@ int main(int argc, char **argv) {
     httpd_req_t interrupted={.interrupt=true};assert(h_export(&interrupted)!=ESP_OK && interrupted.used>0 && !interrupted.ended);
     httpd_req_t send_error={.send_fail=true};assert(h_export(&send_error)!=ESP_OK && !send_error.ended);
     wf=fopen(webpath,"a");assert(wf);fputs("aa,\"",wf);for(int i=0;i<510;i++)fputc('x',wf);fputs("\",auth,2024-02-29 23:59:59,1,2,3,4,5,6,7,8,9,WIFI\n",wf);fclose(wf);
-    httpd_req_t oversized={0};assert(h_export(&oversized)!=ESP_OK && !oversized.ended);
+    httpd_req_t oversized={0};assert(h_export(&oversized)==ESP_OK && oversized.status==500 && !oversized.ended);
     assert(unlink(webpath)==0);assert(rmdir(webdir)==0);test_dir=original_dir;
+    char filterdir[200];snprintf(filterdir,sizeof(filterdir),"%s/filter",test_dir);assert(mkdir(filterdir,0700)==0);
+    test_dir=filterdir;snprintf(webpath,sizeof(webpath),"%s/obs_s0000000001_N.csv",test_dir);
+    wf=fopen(webpath,"w");assert(wf);fputs(CSV_HDR,wf);
+    fputs("pub,\"a,\"\"b\"\"\nname\",BLE,2024-02-29 00:00:00,0,0,-50,0,0,0,0,BLE-PUBLIC,0,BLE\n",wf);
+    fputs("sta,x,BLE,2024-02-29 00:00:00,0,0,-50,0,0,0,0,BLE-STATIC,0,BLE\n",wf);
+    fputs("rpa,x,BLE,2024-02-29 00:00:00,0,0,-50,0,0,0,0,BLE-RPA,0,BLE\n",wf);
+    fputs("old,x,BLE,2024-02-29 00:00:00,0,0,-50,0,0,0,0,,0,BLE\n",wf);
+    fputs("wifi,x,WPA,2024-02-29 00:00:00,0,0,-50,0,0,0,0,,0,WIFI\n",wf);fclose(wf);
+    for(int mode=0;mode<3;mode++) {
+        test_config.ble_address_filter=mode;store_export_t *filtered=NULL;assert(store_export_open(&filtered)==ESP_OK);
+        char data[2048];size_t used=0,n=0;
+        do {assert(store_export_read(filtered,data+used,17,&n)==ESP_OK);used+=n;assert(used<sizeof(data)-17);} while(n);
+        data[used]=0;assert((long)used==store_export_size(filtered));
+        assert(strstr(data,"pub,") && strstr(data,"wifi,") && !strstr(data,"BLE-PUBLIC"));
+        assert((strstr(data,"sta,")!=NULL)==(mode!=2));
+        assert((strstr(data,"rpa,")!=NULL)==(mode==0));assert((strstr(data,"old,")!=NULL)==(mode==0));
+        store_export_close(filtered);
+    }
+    test_config.ble_address_filter=0;assert(unlink(webpath)==0);assert(rmdir(filterdir)==0);test_dir=original_dir;
     for(int i=1;i<=600;i++)make_file(i);
     store_export_t *h=NULL; assert(store_export_open(&h)==ESP_OK);
-    long expected=(long)strlen(CSV_HDR)+600*8;
+    const char *suffix=",x,auth,2024-02-29 00:00:00,1,2,3,4,5,6,7,,9,WIFI\n";
+    long expected=(long)strlen(CSV_HDR)+600*(7+(long)strlen(suffix));
     assert(store_export_size(h)==expected);
     char path[256]; snprintf(path,sizeof(path),"%s/%s",test_dir,s_segment_name);
-    FILE *f=fopen(path,"a"); assert(f); fputs("extra\n",f); fclose(f);
+    FILE *f=fopen(path,"a"); assert(f); fputs("extra,x,auth,2024-02-29 00:00:00,1,2,3,4,5,6,7,,9,WIFI\n",f); fclose(f);
     make_file(601); s_segment_seq=601;
     char buf[257]; long total=0; size_t got; int row=0;
     char *all=malloc((size_t)expected+1); assert(all);
@@ -136,7 +158,7 @@ int main(int argc, char **argv) {
          assert(total+(long)got<=expected); memcpy(all+total,buf,got); total+=(long)got; } while(got);
     assert(total==expected); all[total]=0;
     assert(strncmp(all,CSV_HDR,strlen(CSV_HDR))==0);
-    char *p=all+strlen(CSV_HDR); while(*p){char want[16];snprintf(want,sizeof(want),"row%04d\n",++row);assert(!strncmp(p,want,8));p+=8;}
+    char *p=all+strlen(CSV_HDR); while(*p){char want[80];snprintf(want,sizeof(want),"row%04d%s",++row,suffix);size_t len=strlen(want);assert(!strncmp(p,want,len));p+=len;}
     assert(row==600); free(all); store_export_close(h);
     assert(store_export_open(&h)==ESP_OK); s_store_rewrite_generation++;
     assert(store_export_read(h,buf,sizeof(buf),&got)==ESP_ERR_INVALID_STATE); store_export_close(h);

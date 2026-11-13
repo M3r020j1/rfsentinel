@@ -302,7 +302,7 @@ static esp_err_t h_config_get(httpd_req_t *req) {
         "\"ap_ssid\":\"%s\",\"ap_pass_set\":%s,"
         "\"lat\":%.6f,\"lon\":%.6f,"
         "\"min_rssi\":%d,\"mqtt_min_rssi\":%d,\"rediscover_min\":%d,"
-        "\"scan_wifi\":%d,\"scan_ble\":%d,\"scan_autostart\":%d,\"ui_lang\":%d,"
+        "\"scan_wifi\":%d,\"scan_ble\":%d,\"ble_address_filter\":%d,\"scan_autostart\":%d,\"ui_lang\":%d,"
         "\"mqtt_enabled\":%d,\"mqtt_broker\":\"%s\",\"mqtt_port\":%d,"
         "\"mqtt_user_set\":%s,\"mqtt_user\":\"%s\",\"mqtt_pass_set\":%s,\"mqtt_topic\":\"%s\","
         "\"mqtt_client_id\":\"%s\",\"mqtt_tls\":%d,"
@@ -314,7 +314,7 @@ static esp_err_t h_config_get(httpd_req_t *req) {
         apssid, c->ap_password[0] ? "true" : "false",
         (double)c->lat, (double)c->lon,
         (int)c->min_rssi, (int)c->mqtt_min_rssi, (int)c->rediscover_min,
-        (int)c->scan_wifi, (int)c->scan_ble, (int)c->scan_autostart, (int)c->ui_lang,
+        (int)c->scan_wifi, (int)c->scan_ble, (int)c->ble_address_filter, (int)c->scan_autostart, (int)c->ui_lang,
         (int)c->mqtt_enabled, broker, (int)c->mqtt_port,
         (c->mqtt_user[0] ? "true" : "false"), mqtt_user,
         c->mqtt_pass[0] ? "true" : "false",
@@ -354,6 +354,11 @@ static esp_err_t h_config_set(httpd_req_t *req) {
     cJSON *mqtt_id = cJSON_GetObjectItemCaseSensitive(j, "mqtt_client_id");
     cJSON *presence_topic = cJSON_GetObjectItemCaseSensitive(j, "presence_topic");
     cJSON *presence_absence = cJSON_GetObjectItemCaseSensitive(j, "presence_absence_s");
+    cJSON *ble_filter = cJSON_GetObjectItemCaseSensitive(j, "ble_address_filter");
+    if (ble_filter && (!cJSON_IsNumber(ble_filter) || ble_filter->valuedouble < 0 ||
+        ble_filter->valuedouble > 2 || ble_filter->valuedouble != (int)ble_filter->valuedouble)) {
+        cJSON_Delete(j); send_json(req, 400, "{\"ok\":false,\"error\":\"ble_filter_invalid\"}"); return ESP_OK;
+    }
     if ((mqtt_port && (!cJSON_IsNumber(mqtt_port) || mqtt_port->valuedouble < 1 || mqtt_port->valuedouble > 65535 || mqtt_port->valuedouble != (int)mqtt_port->valuedouble)) ||
         (cJSON_IsString(mqtt_user) && strlen(mqtt_user->valuestring) >= CFG_MQTT_USER_MAX) ||
         (cJSON_IsString(mqtt_pass) && strlen(mqtt_pass->valuestring) >= CFG_MQTT_PASS_MAX) ||
@@ -468,6 +473,9 @@ static esp_err_t h_config_set(httpd_req_t *req) {
                                 (uint8_t)(int)lg->valuedouble);
         }
     }
+    if (ble_filter && config_set_ble_address_filter((uint8_t)ble_filter->valueint) != ESP_OK) {
+        cJSON_Delete(j); send_json(req, 500, "{\"ok\":false,\"error\":\"ble_filter_save_failed\"}"); return ESP_OK;
+    }
     /* mqtt */
     {
         cJSON *en = cJSON_GetObjectItemCaseSensitive(j, "mqtt_enabled");
@@ -566,6 +574,7 @@ static esp_err_t h_scan_status(httpd_req_t *req) {
     bool store_ok = store_stats(&total, &freeb, NULL) == ESP_OK;
     scanner_wifi_diagnostics_t diag = {0};
     scanner_get_wifi_diagnostics(&diag);
+    scanner_ble_diagnostics_t bd = {0}; scanner_get_ble_diagnostics(&bd);
     int64_t age = diag.attempts ? (esp_timer_get_time() - diag.completed_us) / 1000000 : -1;
     snprintf(out, sizeof(out),
              "{\"mode\":\"%s\",\"ip\":\"%s\",\"ts\":\"%s\",\"ts_local\":\"%s\",\"tsq\":\"%s\","
@@ -574,14 +583,17 @@ static esp_err_t h_scan_status(httpd_req_t *req) {
              "\"store_total\":%lu,\"store_used\":%lu,\"store_ok\":%s,\"mqtt_connected\":%s,"
              "\"wifi_scan_attempts\":%lu,\"wifi_scan_failures\":%lu,\"wifi_scan_age\":%lld,"
              "\"wifi_scan_channel\":%u,\"wifi_scan_first\":%u,\"wifi_scan_channel_count\":%u,"
-             "\"wifi_scan_found\":%lu,\"wifi_scan_saved\":%lu,\"wifi_scan_error\":%ld}",
+             "\"wifi_scan_found\":%lu,\"wifi_scan_saved\":%lu,\"wifi_scan_error\":%ld,"
+             "\"ble_public\":%lu,\"ble_static\":%lu,\"ble_rpa\":%lu,\"ble_nrpa\":%lu,\"ble_unknown\":%lu}",
              net_get_mode(), ip, ts, ts_local, net_time_quality_str(), sync, sync_local,
              wifi_json, ble_json, scanner_is_running() ? "true" : "false",
              (unsigned long)total, (unsigned long)(total - freeb), store_ok ? "true" : "false",
              mqtt_is_connected() ? "true" : "false",
              (unsigned long)diag.attempts, (unsigned long)diag.failures, (long long)age,
              (unsigned)diag.channel, (unsigned)diag.first_channel, (unsigned)diag.channel_count,
-             (unsigned long)diag.found, (unsigned long)diag.saved, (long)diag.last_error);
+             (unsigned long)diag.found, (unsigned long)diag.saved, (long)diag.last_error,
+             (unsigned long)bd.public_count, (unsigned long)bd.static_count, (unsigned long)bd.rpa_count,
+             (unsigned long)bd.nrpa_count, (unsigned long)bd.unknown_count);
     httpd_resp_set_type(req, "application/json");
     httpd_resp_set_hdr(req, "Cache-Control", "no-store");
     httpd_resp_sendstr(req, out);
