@@ -14,6 +14,7 @@
 #include "freertos/task.h"
 
 #include "esp_littlefs.h"
+#include "esp_partition.h"
 
 /* conversion struct tm (UTC) -> epoch, sans dependre de timegm() */
 static time_t rfs_timegm(const struct tm *t) {
@@ -239,6 +240,25 @@ static esp_err_t rotate_prune_one(void) {
 
 /* ---- API publique ---- */
 
+/* A mount failure alone never authorizes erasing a journal. Check the entire
+   physical partition; a read error or any programmed byte forbids formatting. */
+static esp_err_t store_partition_is_blank(const esp_partition_t *partition, bool *blank) {
+    if (!partition || !blank || !partition->size || partition->encrypted) return ESP_ERR_INVALID_ARG;
+    *blank = false;
+    uint8_t data[1024];
+    for (size_t off = 0; off < partition->size;) {
+        size_t len = partition->size - off;
+        if (len > sizeof(data)) len = sizeof(data);
+        esp_err_t err = esp_partition_read_raw(partition, off, data, len);
+        if (err != ESP_OK) return err;
+        for (size_t i = 0; i < len; i++) if (data[i] != 0xff) return ESP_OK;
+        off += len;
+        if ((off % 65536) == 0) vTaskDelay(1);
+    }
+    *blank = true;
+    return ESP_OK;
+}
+
 esp_err_t store_init(void) {
     if (!s_store_lock) s_store_lock = xSemaphoreCreateMutex();
     if (!s_store_lock) return ESP_ERR_NO_MEM;
@@ -255,8 +275,22 @@ esp_err_t store_init(void) {
     };
     esp_err_t err = esp_vfs_littlefs_register(&conf);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "littlefs mount: %s", esp_err_to_name(err));
-        return err;
+        ESP_LOGW(TAG, "littlefs montage initial: %s", esp_err_to_name(err));
+        const esp_partition_t *partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA,
+                                                                    ESP_PARTITION_SUBTYPE_ANY, "storage");
+        bool blank = false;
+        esp_err_t check = store_partition_is_blank(partition, &blank);
+        if (check != ESP_OK || !blank) {
+            ESP_LOGE(TAG, "littlefs non initialise: partition non vierge ou verification impossible (%s) ; aucune suppression", esp_err_to_name(check));
+            return err;
+        }
+        ESP_LOGI(TAG, "partition storage vierge: initialisation LittleFS");
+        conf.format_if_mount_failed = true;
+        err = esp_vfs_littlefs_register(&conf);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "littlefs initialisation: %s", esp_err_to_name(err));
+            return err;
+        }
     }
     s_mounted = true;
 

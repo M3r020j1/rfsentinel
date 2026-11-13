@@ -1012,7 +1012,17 @@ async function loadObservations() {
     $("pageInfo").textContent = (lang === "fr" ? "Page " : "Page ") + state.page + (j.has_next ? " +" : "");
     $("prevBtn").disabled = state.page <= 1;
     $("nextBtn").disabled = state.page >= state.pages;
-  } catch (e) { msg(t("netErr") + ": " + e.message, false); }
+  } catch (e) {
+    if (request !== observationRequest) return;
+    const unavailable = e.message === "store" || e.message === "reseau: store";
+    const detail = unavailable
+      ? (lang === "fr" ? "Journal indisponible : vérifiez le stockage dans le journal série." : "Journal unavailable: check storage in the serial log.")
+      : t("netErr") + ": " + e.message;
+    $("obsNote").textContent = detail;
+    $("pageInfo").textContent = "—";
+    $("prevBtn").disabled = $("nextBtn").disabled = true;
+    msg(detail, false);
+  }
 }
 
 /* --- historique de l'equipement + carte --- */

@@ -148,8 +148,11 @@ rfsentinel/
    non bloquant, upload et purge exécutés en arrière-plan avec statut intermédiaire.
 3. **Résilience aux coupures** : LittleFS, journal en fichiers, rotation douce.
    Rien ne se détruit au redémarrage, la config survit en NVS.
-   `format_if_mount_failed=false` : **aucune mise en forme automatique** si le
-   montage échoue, pour ne jamais effacer un journal encore lisible.
+   `format_if_mount_failed=false` : un échec de montage ne déclenche à lui seul
+   aucune mise en forme. La partition `storage` est relue intégralement et LittleFS
+   n'est initialisé que si chaque octet vaut `0xFF`, c'est-à-dire une carte jamais
+   utilisée. Une erreur de lecture, un octet programmé, une partition chiffrée ou
+   absente signifient une erreur retournée et rien n'est effacé.
 4. **Écritures flash limitées** : NVS réservé à la config, référence d'horloge
    écrite au plus une fois par heure, journal en segments de 32 Ko.
 5. **Dépendances minimales** : ESP-IDF + `joltwallet/littlefs` (composant managé,
@@ -270,6 +273,13 @@ reconnu, tombe en `UNKNOWN`.
   rotation intervient entre elles, la lecture s'arrête sur
   `ESP_ERR_INVALID_STATE` plutôt que de servir un fichier dont la longueur ne
   correspondrait pas à l'en-tête.
+- **Premier montage sur une carte neuve** : `store_init()` monte `storage` et, en
+  cas d'échec, appelle `store_partition_is_blank()`, qui parcourt toute la partition
+  par blocs de 1 Ko — avec une pause tous les 64 Ko pour ne pas affamer la boucle
+  principale. Seule une partition entièrement à `0xFF`, signature d'une carte jamais
+  écrite, est formatée puis montée. Tout le reste conserve le journal tel quel et
+  signale le stockage indisponible, ce que l'interface affiche au lieu d'une liste
+  vide.
 
 ### 5.4 Configuration (`config.h`, en NVS)
 
@@ -740,17 +750,21 @@ esptool.py --chip esp32s3 -p /dev/ttyUSB0 write_flash \
 Les images publiées sur la page des versions de ce dépôt s'installent de la même
 façon, sans avoir à compiler.
 
-> **Attention au modèle de carte.** La table de partitions suppose 16 Mo de mémoire
-> flash. Une carte de 8 Mo — même boîtier, même apparence — refusera le
-> démarrage. La LilyGO T-Dongle-S3 que vise le projet est bien en 16 Mo, mais il
-> existe des variantes plus petites sur le marché.
+> **Attention au modèle de carte.** Deux conditions doivent être réunies : 16 Mo de
+> mémoire flash et l'écran ST7735. Une carte de 8 Mo — même boîtier, même apparence —
+> refusera le démarrage, et une carte vendue sans écran n'offre rien à piloter au
+> firmware. La cible est la LilyGO T-Dongle-S3 **avec écran, en version 16 Mo** ; il
+> existe sur le marché des variantes plus petites et des versions sans écran.
 
 ### 12.4 Flasher depuis le navigateur
 
 Le répertoire `webtool/` contient une page autonome qui écrit le firmware par
 l'API Web Serial, sans rien installer côté utilisateur. Elle n'existe que pour
 Chrome et Edge, seuls navigateurs qui exposent le port série, et le navigateur
-n'autorise l'accès que depuis HTTPS, `localhost` ou `file://`.
+n'autorise l'accès que depuis HTTPS, `localhost` ou `file://`. Le déploiement
+conseillé est la copie servie sur <https://upd.rnd0.fr/rfsentinel/>, où la page et
+les images viennent du même serveur ; les montages locaux décrits plus bas restent
+des solutions de repli.
 
 Le moteur choisi n'est pas `esp-web-tools`, la solution la plus répandue : ses
 éléments écrivent avec `flashMode`, `flashFreq` et `flashSize` à `keep`,
@@ -811,7 +825,7 @@ node tests/test_webtool_ui.js    # md5, manifeste, contrôle 8/16 Mo, progressio
 
 | Fichier | Taille | SHA-256 |
 |---|---|---|
-| `rfsentinel.bin` | 1 481 408 o | `21a843ad6ec9300d710d665558475adf86aceeba4d0947dc04ba5ef23c94b930` |
+| `rfsentinel.bin` | 1 482 464 o | `65ec22d5a8daac6222d0a90345e6e737490440ceeb8c32f8a4fcf8571cc17fa2` |
 | `bootloader.bin` | 21 648 o | `f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297` |
 | `partition-table.bin` | 3 072 o | `4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913` |
 
@@ -976,22 +990,25 @@ la configuration ; ils agissent dès le scan suivant.
 
 ### 17.2 Tests sur machine
 
-Le dossier `tests/` contient vingt-neuf programmes autonomes, exécutés sur la machine
-de développement sans ESP-IDF ni matériel : dix-neuf en Python, huit en JavaScript
+Le dossier `tests/` contient trente-et-un programmes autonomes, exécutés sur la machine
+de développement sans ESP-IDF ni matériel : vingt en Python, neuf en JavaScript
 passé par Node, deux en C. Ils portent sur la logique qui n'a pas besoin de la carte :
 format de l'export CSV, tri et filtres, conversions de temps et bornes de
 formatage, seuils d'enregistrement et d'alerte MQTT, déduplication, équipements
 surveillés sous toutes leurs coutures — API, logique, charge utile MQTT, interface —,
 recomptage, accès concurrents au journal, itération sur un LittleFS fragmenté,
 recherches WiGLE en lecture, en résumé et en TLS, lecture de l'export, classification
-et filtrage des adresses BLE, et trois programmes qui compilent un morceau du
+et filtrage des adresses BLE, et quatre programmes qui compilent un morceau du
 firmware sur l'hôte :
 `test_display_lifecycle_host.py` rejoue la bascule d'extinction avec un transfert
 DMA simulé et vérifie que le framebuffer n'est rendu qu'une fois ce transfert terminé
 (§11.5) ; `test_wigle_memory_host.py` exécute le vrai code de recherche WiGLE avec
 un HTTPS simulé et des allocations en échec, pour vérifier que tous les blocs sont
 libérés sur les sorties anticipées ; `test_ble_config_host.py` exécute la vraie fonction
-de réglage du filtre BLE avec une NVS simulée, en succès comme en échec d'écriture.
+de réglage du filtre BLE avec une NVS simulée, en succès comme en échec d'écriture ;
+`test_fresh_storage_host.py` exécute la décision prise par `store_init()` après un
+échec de montage, sur une partition vierge, une qui contient déjà un journal, une
+corrompue, une dont la lecture échoue, une chiffrée et une absente.
 
 ```bash
 for t in tests/test_*.py; do python3 "$t"; done
@@ -1219,11 +1236,15 @@ Ces valeurs s'appliquent tant que l'utilisateur n'a rien changé.
 
 | Version | Date | Contenu |
 |---|---|---|
-| 1.0.0 | novembre 2026 | première version complète |
+| 1.0.0 | novembre 2026 | première version complète, images reprises avec le correctif de carte neuve |
 
 La version 1.0.0 réunit les scans Wi-Fi et BLE, le journal sur carte, l'interface
 web en français et en anglais, la cartographie, l'export au format WiGLE, le
 téléversement vers WiGLE, les alertes MQTT, l'écran et le point d'accès de secours.
+Les images publiées plus tard sous ce même numéro corrigent le démarrage sur une carte
+jamais flashée : la partition `storage` y restait définitivement non montée, sans
+moyen d'enregistrer les observations. Le numéro dans `main/version.h` n'a pas bougé,
+puisque les fonctions annoncées sont les mêmes.
 
 Le numéro est défini une seule fois, dans `main/version.h`, et repris par l'API,
 l'écran et l'interface. Une version publiée n'est pas modifiée après coup : les

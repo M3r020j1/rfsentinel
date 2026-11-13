@@ -173,7 +173,7 @@ the data is without guaranteeing that devices get identified.
 
 | Item | Value |
 |---|---|
-| Board | **LilyGO T-Dongle S3** (ESP32-S3) |
+| Board | **LilyGO T-Dongle S3 with display** (ESP32-S3) |
 | Flash | **16 MB** internal — no SD card |
 | PSRAM | none, everything is sized for internal RAM |
 | Display | ST7735, driven at **160×80** landscape, 1 bpp rendering |
@@ -186,6 +186,12 @@ Display pins, as wired on the T-Dongle S3:
 ```
 CLK 5 · MOSI 3 · DC 2 · RST 1 · CS 4 · backlight 38
 ```
+
+The firmware drives that ST7735 panel and ships a 16 MB partition table, so the only
+board it runs on is the **T-Dongle S3 with display, in its 16 MB version**. Variants
+sold without a screen, and the 8 MB ones, share the same case and the same look but
+are not supported: one has no panel to drive, the other cannot hold a 16 MB
+partition table and will not boot.
 
 ## Getting started
 
@@ -231,7 +237,7 @@ The three images for the current version are in the [`bin/`](bin) folder, next t
 |---|---|---|---|
 | `0x0` | `bootloader.bin` | 21,648 B | `f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297` |
 | `0x8000` | `partition-table.bin` | 3,072 B | `4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913` |
-| `0x10000` | `rfsentinel.bin` | 1,481,408 B | `21a843ad6ec9300d710d665558475adf86aceeba4d0947dc04ba5ef23c94b930` |
+| `0x10000` | `rfsentinel.bin` | 1,482,464 B | `65ec22d5a8daac6222d0a90345e6e737490440ceeb8c32f8a4fcf8571cc17fa2` |
 
 Verify them before writing:
 
@@ -343,12 +349,18 @@ plugging the dongle in, then retry.
 
 ## Flashing from the browser
 
-`webtool/index.html` writes the firmware into the dongle from Google Chrome or
-Microsoft Edge with nothing installed: the page drives the serial port through the
-Web Serial API and relies on [esptool-js](https://github.com/espressif/esptool-js)
-0.7.1, loaded locally from `webtool/vendor/esptool-js/`. No CDN, no intermediate
-server: the images come from the repository or from your own disk, and their SHA-256
-is verified before anything is written.
+**The recommended way to flash a dongle is the online flasher:
+<https://upd.rnd0.fr/rfsentinel/>.** It is the page from this repository, served
+next to the images it writes, so there is nothing to install and nothing to
+configure. Open the link in Chrome or Edge, choose the port, write. The images it
+offers carry the hashes given in the table above.
+
+The page itself is `webtool/index.html`. It drives the serial port through the Web
+Serial API and relies on [esptool-js](https://github.com/espressif/esptool-js) 0.7.1,
+loaded locally from `webtool/vendor/esptool-js/` — no CDN, no intermediate service.
+Chrome and Edge are the only browsers that expose the serial port; Safari and
+Firefox cannot open it at all. Every image has its SHA-256 verified before anything
+is written.
 
 Open the file directly (double-click) or serve it locally:
 
@@ -383,9 +395,11 @@ python3 tools/make_webtool_vendor.py         # only when the esptool-js version 
 The sizes and fingerprints in the two sections above describe the images in `bin/`.
 The browser flasher verifies the fingerprint announced by the manifest it loads.
 
-> GitHub release attachments do not return an `Access-Control-Allow-Origin` header, so
-> the online mode cannot load them. The firmware has to be read from the raw files of
-> the repository or from a GitHub Pages site, both of which allow cross-origin requests.
+> Hosting matters more than it looks. The attachments of a GitHub release return no
+> `Access-Control-Allow-Origin` header, so a page served from another site cannot read
+> them. The raw files of a repository and a Pages site do return that header. The
+> simplest setup stays the one used at `upd.rnd0.fr/rfsentinel/`: page, manifest and
+> images come from the same host, so no cross-origin rule is involved.
 
 ## Web API
 
@@ -561,8 +575,8 @@ tests/                  host-side tests (logic, API, interface)
 
 ## Tests
 
-Twenty-nine standalone programs run on the development machine, with no ESP-IDF and
-no board: nineteen in Python, eight in JavaScript with Node, two in C. They cover the
+Thirty-one standalone programs run on the development machine, with no ESP-IDF and
+no board: twenty in Python, nine in JavaScript with Node, two in C. They cover the
 logic that does not depend on hardware — journal and rotation, CSV export, calibration
 and its thresholds, MQTT threshold and de-duplication, watched devices and presence
 alerts, recounting, concurrent access, LittleFS iteration, WiGLE lookups under
@@ -582,7 +596,7 @@ cc -Imain tests/test_ble_address.c -o /tmp/bleaddr && /tmp/bleaddr
 
 The LittleFS test compiles against the library fetched by ESP-IDF, so `idf.py
 reconfigure` has to have run at least once. The BLE address test only needs the
-headers from `main/`. The other twenty-seven start as they are.
+headers from `main/`. The other twenty-nine start as they are.
 
 ## Known limitations
 

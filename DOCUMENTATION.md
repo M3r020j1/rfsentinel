@@ -147,8 +147,11 @@ rfsentinel/
    tick, upload and purge run in the background with an intermediate status.
 3. **Resilience to outages**: LittleFS, journal in files, gentle rotation.
    Nothing is destroyed on restart, the configuration survives in NVS.
-   `format_if_mount_failed=false`: **no automatic formatting** if mounting
-   fails, so a still-readable journal is never erased.
+   `format_if_mount_failed=false`: a failed mount on its own never authorises a
+   format. The `storage` partition is read through in full and LittleFS is only
+   initialised when every byte reads `0xFF`, that is a card that has never been
+   used. A read error, a programmed byte, an encrypted or missing partition means
+   an error is returned and nothing gets erased.
 4. **Limited flash writes**: NVS reserved for configuration, clock reference
    written at most once an hour, journal in 32 KB segments.
 5. **Minimal dependencies**: ESP-IDF + `joltwallet/littlefs` (managed
@@ -267,6 +270,13 @@ back to `UNKNOWN`.
   The two passes read the same frozen copy of the journal; if a rotation happens
   between them, the read stops on `ESP_ERR_INVALID_STATE` rather than serving a
   file whose length would not match the header.
+
+- **First mount on a fresh card**: `store_init()` mounts `storage`, and on failure
+  calls `store_partition_is_blank()`, which walks the whole partition in 1 KB
+  blocks — yielding every 64 KB so the main loop is not starved. Only an all-`0xFF`
+  partition, the signature of a card that has never been written, is formatted and
+  mounted. Anything else keeps the journal exactly as it is and reports the storage
+  as unavailable, which the interface shows instead of an empty list.
 
 ### 5.4 Configuration (`config.h`, in NVS)
 
@@ -763,17 +773,20 @@ If your esptool came with ESP-IDF 5.3 it is version 4.x and expects underscores:
 `esptool.py`. Those spellings still work on esptool 5, which accepts them with a
 deprecation warning.
 
-> **Check the exact board model before writing to flash.** The partition table
-> assumes 16 MB of flash. An 8 MB board — same case, same look — will refuse to boot.
-> The LilyGO T-Dongle-S3 this project targets does have 16 MB, but smaller variants
-> exist on the market.
+> **Check the exact board model before writing to flash.** Two conditions have to hold
+> at once: 16 MB of flash and the ST7735 screen. An 8 MB board — same case, same look
+> — will refuse to boot, and a board sold without a screen has nothing for the
+> firmware to drive. The target is the LilyGO T-Dongle-S3 **with display, in its 16 MB
+> version**; smaller and screenless variants exist on the market.
 
 ### 12.4 Flashing from the browser
 
 The `webtool/` folder holds a standalone page that writes the firmware through the
 Web Serial API, with nothing to install on the user's side. It only exists for Chrome
 and Edge, the only browsers that expose the serial port, and the browser only allows
-access from HTTPS, `localhost` or `file://`.
+access from HTTPS, `localhost` or `file://`. The recommended deployment is the copy
+served at <https://upd.rnd0.fr/rfsentinel/>, where the page and the images come from
+the same host; the local options described below stay available as fallbacks.
 
 The engine chosen is not `esp-web-tools`, the most common solution: its manifests
 write with `flashMode`, `flashFreq` and `flashSize` set to `keep`, meaning the
@@ -830,7 +843,7 @@ node tests/test_webtool_ui.js    # md5, manifest, 8/16 MB check, progress
 
 | File | Size | SHA-256 |
 |---|---|---|
-| `rfsentinel.bin` | 1,481,408 B | `21a843ad6ec9300d710d665558475adf86aceeba4d0947dc04ba5ef23c94b930` |
+| `rfsentinel.bin` | 1,482,464 B | `65ec22d5a8daac6222d0a90345e6e737490440ceeb8c32f8a4fcf8571cc17fa2` |
 | `bootloader.bin` | 21,648 B | `f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297` |
 | `partition-table.bin` | 3,072 B | `4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913` |
 
@@ -989,21 +1002,24 @@ The French versions of both documents live in `docs/fr/` and carry the same cont
 
 ### 17.2 Host-side tests
 
-The `tests/` folder holds twenty-nine standalone programs, run on the development
-machine without ESP-IDF and without hardware: nineteen in Python, eight in JavaScript
+The `tests/` folder holds thirty-one standalone programs, run on the development
+machine without ESP-IDF and without hardware: twenty in Python, nine in JavaScript
 through Node, two in C. They cover the logic that does not need the board: CSV export
 format, sorting and filtering, time conversions and formatting bounds, recording and
 MQTT alert thresholds, de-duplication, watched devices from every angle — API, logic,
 MQTT payload, interface —, recounting, concurrent access to the journal, iteration
 over a fragmented LittleFS, WiGLE searches in list mode, in summary and in TLS,
-reading of the export, classification and filtering of BLE addresses, and three
+reading of the export, classification and filtering of BLE addresses, and four
 programs that compile a piece of the firmware on the host:
 `test_display_lifecycle_host.py` replays the switch-off toggle with a simulated
 DMA transfer and checks the framebuffer is only returned once that transfer finished
 (§11.5); `test_wigle_memory_host.py` runs the real WiGLE search code with simulated
 HTTPS and failing allocations, to check every block is released on early exits;
 `test_ble_config_host.py` runs the real BLE filter setter against a simulated NVS,
-both on success and on a failed write.
+both on success and on a failed write; `test_fresh_storage_host.py` runs the decision
+taken by `store_init()` after a failed mount, against a blank partition, one that
+already holds a journal, one that is corrupted, one whose read fails, an encrypted
+partition and a missing partition.
 
 ```bash
 for t in tests/test_*.py; do python3 "$t"; done
@@ -1229,11 +1245,15 @@ These apply until the user changes something.
 
 | Version | Date | Content |
 |---|---|---|
-| 1.0.0 | November 2026 | first complete release |
+| 1.0.0 | November 2026 | first complete release, images refreshed with the fresh-card storage fix |
 
 Version 1.0.0 brings together Wi-Fi and BLE scanning, the journal on the board, the
 web interface in French and English, the map, export in WiGLE format, upload to
-WiGLE, MQTT alerts, the screen and the rescue access point.
+WiGLE, MQTT alerts, the screen and the rescue access point. The images published later
+under this same number correct the start-up on a card that has never been flashed:
+the `storage` partition used to stay unmounted for good there, with no way to record
+observations. The number in `main/version.h` did not move, since the advertised
+functions are the same.
 
 The number is defined once, in `main/version.h`, and picked up by the API, the
 screen and the interface. A published version is not modified afterwards: fixes go

@@ -189,7 +189,7 @@ filtrage améliore la pertinence des données sans garantir l'identification des
 
 | Élément | Valeur |
 |---|---|
-| Carte | **LilyGO T-Dongle S3** (ESP32-S3) |
+| Carte | **LilyGO T-Dongle S3 avec écran** (ESP32-S3) |
 | Flash | **16 Mo** interne — pas de carte SD |
 | PSRAM | aucune, tout est dimensionné en RAM interne |
 | Écran | ST7735, piloté en **160×80** paysage, rendu 1 bpp |
@@ -202,6 +202,13 @@ Pins de l'écran, telles que câblées sur la T-Dongle S3 :
 ```
 CLK 5 · MOSI 3 · DC 2 · RST 1 · CS 4 · rétroéclairage 38
 ```
+
+Le firmware pilote cet écran ST7735 et embarque une table de partitions de 16 Mo :
+la seule carte qui le fait tourner est donc la **T-Dongle S3 avec écran, en version
+16 Mo**. Les variantes vendues sans écran et les versions 8 Mo ont le même boîtier et
+la même apparence, mais ne sont pas prises en charge : les unes n'ont aucun écran à
+piloter, les autres ne peuvent pas contenir une table de partitions de 16 Mo et ne
+démarrent pas.
 
 ## Prise en main
 
@@ -250,14 +257,14 @@ Paramètres de flash :
 |---|---|---|
 | `0x0` | `bootloader.bin` | 21 648 o |
 | `0x8000` | `partition-table.bin` | 3 072 o |
-| `0x10000` | `rfsentinel.bin` | 1 481 408 o |
+| `0x10000` | `rfsentinel.bin` | 1 482 464 o |
 
 Empreintes SHA-256 des binaires de la version 1.0.0 :
 
 ```
 f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297  bootloader.bin
 4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913  partition-table.bin
-21a843ad6ec9300d710d665558475adf86aceeba4d0947dc04ba5ef23c94b930  rfsentinel.bin
+65ec22d5a8daac6222d0a90345e6e737490440ceeb8c32f8a4fcf8571cc17fa2  rfsentinel.bin
 ```
 
 ```bash
@@ -276,12 +283,18 @@ Par `idf.py -p /dev/ttyACM0 flash`, le projet écrit les trois mêmes zones.
 
 ## Flasher depuis le navigateur
 
-`webtool/index.html` écrit le firmware dans le dongle depuis Google Chrome ou
-Microsoft Edge, sans rien installer : la page pilote le port série par l'API
+**La méthode conseillée pour flasher une clé est le Web Flasher en ligne :
+<https://upd.rnd0.fr/rfsentinel/>.** C'est la page de ce dépôt, servie à côté des
+images qu'elle écrit : rien à installer, rien à configurer. On ouvre le lien dans
+Chrome ou Edge, on choisit le port, on écrit. Les images proposées portent les
+empreintes indiquées dans le tableau du § Flash.
+
+La page elle-même est `webtool/index.html`. Elle pilote le port série par l'API
 Web Serial et s'appuie sur [esptool-js](https://github.com/espressif/esptool-js)
-0.7.1, chargé en local depuis `webtool/vendor/esptool-js/`. Aucun CDN, aucun
-serveur intermédiaire : les images viennent du dépôt ou de votre disque, et leur
-empreinte SHA-256 est vérifiée avant l'écriture.
+0.7.1, chargé en local depuis `webtool/vendor/esptool-js/` — aucun CDN, aucun
+service intermédiaire. Chrome et Edge sont les seuls navigateurs qui exposent le
+port série : Safari et Firefox ne peuvent pas y accéder. Chaque image voit son
+empreinte SHA-256 vérifiée avant la moindre écriture.
 
 Ouvrir le fichier directement (double-clic) ou le servir localement :
 
@@ -321,10 +334,12 @@ liste `SHA256SUMS` ; les deux jeux diffèrent dès qu'une recompilation change
 `rfsentinel.bin`. Le flasher navigateur vérifie l'empreinte annoncée par le
 manifeste qu'il charge, pas celle du tableau.
 
-> Les pièces jointes d'une publication GitHub ne renvoient pas d'en-tête
-> `Access-Control-Allow-Origin` : le mode en ligne ne peut pas les charger. Le
-> firmware doit donc être lu depuis les fichiers bruts du dépôt ou une page
-> GitHub Pages, qui autorisent les requêtes croisées.
+> L'hébergement compte plus qu'il n'y paraît. Les pièces jointes d'une publication
+> GitHub ne renvoient pas d'en-tête `Access-Control-Allow-Origin` : une page hébergée
+> ailleurs ne peut pas les lire. Les fichiers bruts d'un dépôt et une page GitHub Pages
+> en renvoient. Le montage le plus simple reste celui de `upd.rnd0.fr/rfsentinel/` :
+> page, manifeste et images sur le même serveur, donc aucune règle cross-origin à
+> configurer.
 
 ## API Web
 
@@ -499,8 +514,8 @@ DOCUMENTATION.md        architecture, choix techniques, constantes, reprise
 
 ## Tests
 
-Vingt-neuf programmes autonomes tournent sur la machine de développement, sans
-ESP-IDF ni carte : dix-neuf en Python, huit en JavaScript avec Node, deux en C. Ils
+Trente-et-un programmes autonomes tournent sur la machine de développement, sans
+ESP-IDF ni carte : vingt en Python, neuf en JavaScript avec Node, deux en C. Ils
 couvrent la logique qui ne dépend pas du matériel — journal et rotation, export CSV,
 calibration et ses seuils, seuil et déduplication MQTT, équipements surveillés et
 alertes de présence, recomptage, accès concurrents, itération LittleFS, recherches
@@ -520,7 +535,7 @@ cc -Imain tests/test_ble_address.c -o /tmp/bleaddr && /tmp/bleaddr
 
 Le test LittleFS se compile contre la bibliothèque LittleFS récupérée par ESP-IDF :
 il faut donc avoir lancé au moins une fois `idf.py reconfigure`. Le test sur les
-adresses BLE ne demande que les en-têtes de `main/`. Les vingt-sept autres se
+adresses BLE ne demande que les en-têtes de `main/`. Les vingt-neuf autres se
 lancent tels quels.
 
 ## Limites connues
