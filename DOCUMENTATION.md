@@ -797,6 +797,12 @@ the real capacity before writing and refuses any smaller board. The manifest onl
 supplies URLs and hashes: never an address nor a memory setting, and the `0x0`,
 `0x8000` and `0x10000` addresses come from the page's code.
 
+The page is bilingual French / English. A selector in the header switches every
+label, including the messages read back from the board, the choice is stored in the
+browser, and the first visit follows the language of the browser. Translating the
+page never changes the write plan: the addresses, the memory settings and the
+capacity guard stay as described above.
+
 The page has to work offline, therefore without ES module imports, which Chrome
 forbids under `file://`. The esptool-js bundle, shipped as ES modules, is converted
 into a classic script by `tools/make_webtool_vendor.py`: the final `export` clause

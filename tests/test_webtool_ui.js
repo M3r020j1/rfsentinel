@@ -11,13 +11,16 @@ assert.equal(blocs,2,'la page doit charger le vendor puis son script');
 const script=page.slice(page.lastIndexOf('<script>')+8,page.lastIndexOf('</scr'+'ipt>'));
 
 const elements={};
-const document={readyState:'loading',addEventListener(){},documentElement:{getAttribute(){return null;},setAttribute(){}},
+const attributs={};
+const document={readyState:'loading',addEventListener(){},documentElement:{getAttribute(n){return Object.prototype.hasOwnProperty.call(attributs,n)?attributs[n]:null;},setAttribute(n,v){attributs[n]=String(v);}},
   createElement(){return{style:{},classList:{add(){},remove(){},toggle(){}},firstElementChild:{style:{}}};},
-  getElementById(id){return elements[id]||(elements[id]={style:{},classList:{add(){},remove(){},toggle(){}},firstElementChild:{style:{},textContent:''},hidden:true,checked:false,value:'',textContent:'',innerHTML:''});}};
+  getElementById(id){return elements[id]||(elements[id]={style:{},classList:{add(){},remove(){},toggle(){}},firstElementChild:{style:{},textContent:''},hidden:true,checked:false,value:'',textContent:'',innerHTML:'',_a:{},setAttribute(n,v){this._a[n]=String(v);},getAttribute(n){return this._a[n]===undefined?null:this._a[n];}});}};
 const contexte={document,navigator:{},location:{protocol:'file:',href:'file:///webtool/index.html'},
   window:{isSecureContext:true},console,Error,Math,JSON,String,Number,Array,Object,Boolean,RegExp,Promise,
   parseInt,parseFloat,isFinite,isNaN,setTimeout,clearTimeout,Date,Uint8Array,Uint32Array,ArrayBuffer,
-  TextEncoder,TextDecoder,URL,fetch:undefined};
+  TextEncoder,TextDecoder,URL,fetch:undefined,
+  localStorage:(function(){var d={};return{getItem(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null;},
+    setItem(k,v){d[k]=String(v);}};})()};
 contexte.globalThis=contexte;
 vm.createContext(contexte);
 vm.runInContext(script,contexte,{filename:'webtool/index.html'});
@@ -144,7 +147,72 @@ assert.equal(C.imagesPretes(),true,'le manifeste survit a un aller-retour vers l
 assert.equal(C.etat.sources.depot.plan.length,3,'le plan du depot n a pas ete efface');
 assert.equal(C.etat.sources.local.plan.length,0,'le mode fichiers n a rien herite du depot');
 
-/* 10 — mode hors ligne : les trois fichiers choisis sur disque produisent le
+/* 10 — bilingue : les deux dictionnaires couvrent les memes cles, et tout ce
+   que la page ecrit pendant une session est reconstruit a la demande. */
+const clesFR=Object.keys(C.I18N.fr).sort(),clesEN=Object.keys(C.I18N.en).sort();
+assert.deepEqual(clesFR,clesEN,'les deux dictionnaires ont les memes cles');
+assert.ok(clesFR.length>=101,'les dictionnaires doivent etre complets');
+const sansTexte=C.IDS_TEXTE.filter(i=>C.I18N.fr[i]===undefined||C.I18N.en[i]===undefined);
+assert.deepEqual(sansTexte,[],'ids sans traduction : '+sansTexte.join(', '));
+const sansTitre=C.IDS_TITRE.map(t=>'titre-'+t).filter(t=>C.I18N.fr[t]===undefined||C.I18N.en[t]===undefined);
+assert.deepEqual(sansTitre,[],'titres sans traduction : '+sansTitre.join(', '));
+C.appliquerLangue('en');
+assert.equal(C.langue(),'en','la langue bascule');
+assert.match(C.T('err-puce'),/ESP32-S3/,'le nom de puce reste en anglais');
+assert.match(C.T('err-manifeste-json'),/JSON/);
+assert.match(C.T('err-manifeste-images'),/images/);
+assert.equal(C.T('lib-image-adresse','rfsentinel.bin','0x10000'),'rfsentinel.bin at 0x10000');
+C.appliquerLangue('fr');
+assert.equal(C.langue(),'fr');
+assert.match(C.T('err-puce'),/ESP32-S3/);
+assert.match(C.T('err-manifeste-json'),/JSON/);
+assert.match(C.T('err-manifeste-images'),/images/);
+assert.equal(C.T('lib-image-adresse','rfsentinel.bin','0x10000'),'rfsentinel.bin à 0x10000');
+assert.equal(C.octets(21648),'21.1 Ko','les tailles ne dependent pas de la langue');
+
+/* Les messages de controle suivent la langue choisie, y compris apres coup. */
+C.appliquerLangue('en');
+assert.match(C.controlerPuce('ESP32-C3','16MB').motifs[0],/built for ESP32-S3/);
+assert.match(C.controlerPuce('ESP32-S3','8MB').motifs[0],/will not boot/);
+assert.equal(C.controlerPuce('ESP32-C3','8MB').motifs.length,2,'deux refus cumules');
+assert.throws(()=>C.lireManifeste({chipFamily:'ESP32-C3',parts:[{}]}),/ESP32-S3/);
+assert.throws(()=>C.lireManifeste('nope'),/JSON/);
+assert.throws(()=>C.lireManifeste({chipFamily:'ESP32-S3'}),/images/);
+C.appliquerLangue('fr');
+assert.match(C.controlerPuce('ESP32-C3','16MB').motifs[0],/compilé pour ESP32-S3/);
+
+/* Le refus, les infos puce et le resultat partent de l'etat : changer de
+   langue les retraduit sans relire la carte. */
+C.etat.controleBrut={puce:'ESP32-S3 (QFN56) ESP32-S3',taille:'8MB'};
+C.etat.controle=C.controlerPuce(C.etat.controleBrut.puce,C.etat.controleBrut.taille);
+C.etat.gateBrut=null;
+C.appliquerLangue('fr');
+assert.match(C.document.getElementById('gate').innerHTML,/Écriture refusée/);
+C.appliquerLangue('en');
+assert.match(C.document.getElementById('gate').innerHTML,/Writing refused/);
+assert.match(C.document.getElementById('gate').innerHTML,/will not boot/);
+C.etat.infosPuce={puce:'ESP32-S3 (QFN56)',taille:'',mac:'',options:'X'};
+C.appliquerLangue('fr');
+assert.match(C.document.getElementById('infos-puce').innerHTML,/non lue/);
+C.appliquerLangue('en');
+assert.match(C.document.getElementById('infos-puce').innerHTML,/not read/);
+C.etat.resultat={cle:'res-succes',classe:'reussie',args:['1.0.0'],suite:'res-succes-conserve'};
+C.appliquerLangue('fr');
+assert.match(C.document.getElementById('resultat').innerHTML,/journal est conservé/);
+C.appliquerLangue('en');
+assert.match(C.document.getElementById('resultat').innerHTML,/log is kept/);
+C.etat.controleBrut=null;
+C.etat.gateBrut={cle:'gate-connexion',args:['port busy'],classe:'erreur'};
+C.appliquerLangue('fr');
+assert.match(C.document.getElementById('gate').innerHTML,/Connexion impossible/);
+C.appliquerLangue('en');
+assert.match(C.document.getElementById('gate').innerHTML,/Cannot connect/);
+assert.match(C.document.getElementById('gate').innerHTML,/port busy/);
+C.basculerLangue('fr');
+assert.equal(C.langue(),'fr','le choix est memorise');
+C.appliquerLangue('en');
+
+/* 11 — mode hors ligne : les trois fichiers choisis sur disque produisent le
    meme plan impose, sans empreinte SHA-256 publiee. */
 const fauxFichier=(nom,taille)=>({name:nom,arrayBuffer:async()=>new Uint8Array(taille).buffer});
 const fichiers={'f-boot':[fauxFichier('bootloader.bin',21648)],'f-part':[fauxFichier('partition-table.bin',3072)],'f-app':[fauxFichier('rfsentinel.bin',3072)]};
@@ -158,5 +226,5 @@ const fichiers={'f-boot':[fauxFichier('bootloader.bin',21648)],'f-part':[fauxFic
   assert.deepEqual(local.plan.map(x=>x.sha256),['','',''],'aucune empreinte publiee en mode fichiers');
   assert.equal(local.manifeste.local,true,'le resume doit prevenir de l absence d empreinte');
   assert.equal(C.etat.sources.depot.plan.length,3,'le manifeste du depot reste intact');
-  console.log('Flasher navigateur: MD5, plan impose, manifeste, controle 8/16 Mo, progression, manifeste emballe, sources independantes, mode hors ligne et ids: OK');
+  console.log('Flasher navigateur: MD5, plan impose, manifeste, controle 8/16 Mo, progression, manifeste emballe, sources independantes, bilingue FR/EN, mode hors ligne et ids: OK');
 })().catch(function(e){console.error('mode hors ligne: '+(e&&e.message));process.exit(1);});

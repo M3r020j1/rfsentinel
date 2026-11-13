@@ -296,6 +296,10 @@ service intermédiaire. Chrome et Edge sont les seuls navigateurs qui exposent l
 port série : Safari et Firefox ne peuvent pas y accéder. Chaque image voit son
 empreinte SHA-256 vérifiée avant la moindre écriture.
 
+La page est bilingue français / anglais : un sélecteur figure dans l'en-tête, le
+choix est mémorisé dans le navigateur et la première visite reprend la langue de
+celui-ci.
+
 Ouvrir le fichier directement (double-clic) ou le servir localement :
 
 ```bash

@@ -776,6 +776,12 @@ refuse toute carte plus petite. Le manifeste ne fournit que des URL et des
 empreintes : jamais une adresse ni un réglage mémoire, et les adresses `0x0`,
 `0x8000` et `0x10000` viennent du code de la page.
 
+La page est bilingue français / anglais. Le sélecteur de l'en-tête traduit tous les
+libellés, y compris les messages lus sur la carte ; le choix est enregistré dans le
+navigateur et la première visite suit sa langue. Traduire la page ne change jamais le
+plan d'écriture : les adresses, les réglages mémoire et le contrôle de capacité
+restent ceux décrits ci-dessus.
+
 La page doit marcher hors ligne, donc sans import de module ES, ce que Chrome
 interdit en `file://`. Le bundle d'esptool-js, livré en modules ES, est converti
 en script classique par `tools/make_webtool_vendor.py` : la clause `export`

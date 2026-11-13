@@ -362,6 +362,9 @@ Chrome and Edge are the only browsers that expose the serial port; Safari and
 Firefox cannot open it at all. Every image has its SHA-256 verified before anything
 is written.
 
+The page is bilingual French / English: a selector sits in the header, the choice is
+remembered in the browser, and the first visit takes the language of the browser.
+
 Open the file directly (double-click) or serve it locally:
 
 ```bash
