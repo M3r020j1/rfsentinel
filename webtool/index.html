@@ -284,7 +284,7 @@ var BAUD_DEBUT = 115200;
 /* ------------------------------------------------------------------ */
 /* Langue. Chaque texte fixe de la page porte un id : le script ne      */
 /* remplace que la liste ci-dessous, jamais le DOM en general. Les      */
-/* chaines produites a l execution passent par T(cle, ...) qui remplace */
+/* chaines produites a l execution passent par tr(cle, ...) qui remplace */
 /* {0} {1} ... par les valeurs fournies, dans la langue affichee.       */
 /* ------------------------------------------------------------------ */
 
@@ -566,7 +566,7 @@ function melanger(modele, valeurs) {
   return texte;
 }
 
-function T(cle) {
+function tr(cle) {
   var table = I18N[langue()] || I18N.fr;
   var modele = table[cle];
   if (modele === undefined) modele = I18N.fr[cle];
@@ -726,17 +726,17 @@ function md5(donnees) {
 function lireManifeste(brut) {
   var m;
   try { m = (typeof brut === "string") ? JSON.parse(brut) : brut; }
-  catch (e) { throw new Error(T("err-manifeste-json")); }
-  if (!m || typeof m !== "object") throw new Error(T("err-manifeste-objet"));
+  catch (e) { throw new Error(tr("err-manifeste-json")); }
+  if (!m || typeof m !== "object") throw new Error(tr("err-manifeste-objet"));
   if (String(m.chipFamily || "").toUpperCase().replace(/[^A-Z0-9]/g, "") !==
       PLAN_IMPOSE.chip.toUpperCase().replace(/[^A-Z0-9]/g, "")) {
-    throw new Error(T("err-manifeste-puce", m.chipFamily || T("inconnue")));
+    throw new Error(tr("err-manifeste-puce", m.chipFamily || tr("inconnue")));
   }
   var urls = {};
   var sha = {};
   var taille = {};
   var parties = Array.isArray(m.parts) ? m.parts : [];
-  if (!parties.length) throw new Error(T("err-manifeste-images"));
+  if (!parties.length) throw new Error(tr("err-manifeste-images"));
   for (var i = 0; i < parties.length; i++) {
     var p = parties[i] || {};
     var nom = String(p.fichier || p.path || "").split("/").pop();
@@ -807,18 +807,18 @@ function controlerPuce(puceDetectee, tailleDetectee) {
   var motifs = [];
   var avertissements = [];
   if (puce.indexOf("S3") < 0) {
-    motifs.push(T("err-puce", puceDetectee || T("inconnue")));
+    motifs.push(tr("err-puce", puceDetectee || tr("inconnue")));
   }
   var taille = String(tailleDetectee || "");
   var octetsDetectes = 0;
   var mesure = /^([0-9]+)\s*MB$/i.exec(taille);
   if (mesure) octetsDetectes = parseInt(mesure[1], 10) * 1048576;
   if (!taille) {
-    avertissements.push(T("av-taille-non-lue"));
+    avertissements.push(tr("av-taille-non-lue"));
   } else if (octetsDetectes < 16 * 1048576) {
-    motifs.push(T("err-taille-petite", taille));
+    motifs.push(tr("err-taille-petite", taille));
   } else if (octetsDetectes > 16 * 1048576) {
-    avertissements.push(T("av-taille-grande", taille));
+    avertissements.push(tr("av-taille-grande", taille));
   }
   return { bloque: motifs.length > 0, motifs: motifs,
     avertissements: avertissements, tailleOctets: octetsDetectes };
@@ -909,18 +909,18 @@ function signaler(id, message, classe) {
 function afficherGate() {
   if (etat.gateBrut) {
     var brut = etat.gateBrut;
-    signaler("gate", brut.args ? melanger(T(brut.cle), brut.args) : T(brut.cle), brut.classe);
+    signaler("gate", brut.args ? melanger(tr(brut.cle), brut.args) : tr(brut.cle), brut.classe);
     return;
   }
   var controle = etat.controle;
   if (!controle) { signaler("gate", "", "note"); return; }
   if (controle.bloque) {
-    signaler("gate", T("gate-refus") + controle.motifs.map(espace).join("<br>"), "erreur");
+    signaler("gate", tr("gate-refus") + controle.motifs.map(espace).join("<br>"), "erreur");
   } else if (controle.avertissements.length) {
-    signaler("gate", T("gate-verif") + controle.avertissements.map(espace).join("<br>") +
-      T("gate-verif-suite"), "alerte");
+    signaler("gate", tr("gate-verif") + controle.avertissements.map(espace).join("<br>") +
+      tr("gate-verif-suite"), "alerte");
   } else {
-    signaler("gate", T("gate-ok"), "reussie");
+    signaler("gate", tr("gate-ok"), "reussie");
   }
 }
 
@@ -930,10 +930,10 @@ function afficherInfosPuce() {
   if (!bloc) return;
   if (!infos) { bloc.hidden = true; return; }
   var lignes = [
-    [T("lbl-puce"), infos.puce || "—"],
-    [T("lbl-flash"), infos.taille || T("non-lue")],
-    [T("lbl-mac"), infos.mac || "—"],
-    [T("lbl-options"), infos.options || "—"]
+    [tr("lbl-puce"), infos.puce || "—"],
+    [tr("lbl-flash"), infos.taille || tr("non-lue")],
+    [tr("lbl-mac"), infos.mac || "—"],
+    [tr("lbl-options"), infos.options || "—"]
   ];
   var html = "";
   for (var i = 0; i < lignes.length; i++) {
@@ -946,8 +946,8 @@ function afficherInfosPuce() {
 function afficherResultat() {
   var fini = etat.resultat;
   if (!fini) { signaler("resultat", "", "note"); return; }
-  var message = fini.args ? melanger(T(fini.cle), fini.args) : T(fini.cle);
-  if (fini.suite) message += T(fini.suite);
+  var message = fini.args ? melanger(tr(fini.cle), fini.args) : tr(fini.cle);
+  if (fini.suite) message += tr(fini.suite);
   signaler("resultat", message, fini.classe);
   el("resultat").hidden = false;
 }
@@ -955,17 +955,17 @@ function afficherResultat() {
 /* Avertissements de contexte : navigateur, HTTPS, moteur d'écriture. */
 function verifierContexte() {
   if (!("serial" in navigator)) {
-    signaler("avert-navigateur", T("avert-navigateur-txt"), "erreur");
+    signaler("avert-navigateur", tr("avert-navigateur-txt"), "erreur");
   } else {
     signaler("avert-navigateur", "", "note");
   }
   if (!window.isSecureContext) {
-    signaler("avert-contexte", T("avert-contexte-txt"), "alerte");
+    signaler("avert-contexte", tr("avert-contexte-txt"), "alerte");
   } else {
     signaler("avert-contexte", "", "note");
   }
   if (!globalThis.esptooljs || !globalThis.esptooljs.ESPLoader) {
-    signaler("avert-navigateur", T("avert-moteur-txt"), "erreur");
+    signaler("avert-navigateur", tr("avert-moteur-txt"), "erreur");
     el("btn-charge").disabled = true;
   }
 }
@@ -1004,7 +1004,7 @@ function afficherPlan() {
   var lignes = "";
   for (var i = 0; i < src.plan.length; i++) {
     var p = src.plan[i];
-    var empreinte = p.sha256 ? "SHA-256 " + p.sha256.slice(0, 12) + "…" : T("absente");
+    var empreinte = p.sha256 ? "SHA-256 " + p.sha256.slice(0, 12) + "…" : tr("absente");
     lignes += "<tr><td class=mono>" + hexadecale(p.address) + "</td><td>" + espace(p.fichier) +
       "</td><td class=mono>" + (p.taille ? octets(p.taille) : "—") + "</td><td>" +
       espace(empreinte) + "</td></tr>";
@@ -1012,26 +1012,26 @@ function afficherPlan() {
   el("lignes-images").innerHTML = lignes;
   el("resume").hidden = false;
   var adresses = src.plan.map(function (x) { return hexadecale(x.address); }).join(", ");
-  var info = T("info-plan", espace(src.manifeste.nom), espace(src.manifeste.version),
+  var info = tr("info-plan", espace(src.manifeste.nom), espace(src.manifeste.version),
     espace(PLAN_IMPOSE.chip), PLAN_IMPOSE.flashMode, PLAN_IMPOSE.flashFreq,
     PLAN_IMPOSE.flashSize, adresses);
   if (src.manifeste.local) {
-    info += T("info-plan-local");
+    info += tr("info-plan-local");
   } else {
     var manquantes = empreinteAttendue(src.plan);
-    if (manquantes.length) info += T("info-plan-empreintes", manquantes.join(", "));
+    if (manquantes.length) info += tr("info-plan-empreintes", manquantes.join(", "));
   }
   signaler("info-manifeste", info, "note");
 }
 
 async function chargerManifeste() {
   var url = el("base").value.trim();
-  if (!url) { signaler("etat-depot", T("etat-manifeste-url"), "alerte"); return; }
+  if (!url) { signaler("etat-depot", tr("etat-manifeste-url"), "alerte"); return; }
   el("btn-charge").disabled = true;
-  el("etat-depot").textContent = T("chargement");
+  el("etat-depot").textContent = tr("chargement");
   try {
     var reponse = await fetch(url, { cache: "no-store" });
-    if (!reponse.ok) throw new Error(T("err-serveur", reponse.status));
+    if (!reponse.ok) throw new Error(tr("err-serveur", reponse.status));
     var brut = await reponse.json();
     brut._url = reponse.url || url;
     var depot = etat.sources.depot;
@@ -1039,13 +1039,13 @@ async function chargerManifeste() {
     depot.plan = planDepuisManifeste(depot.manifeste, brut._url);
     depot.images = [];
     if (sourceChoisie() === "depot") afficherPlan();
-    el("etat-depot").textContent = T("etat-manifeste-charge", depot.manifeste.version);
+    el("etat-depot").textContent = tr("etat-manifeste-charge", depot.manifeste.version);
     majBoutons();
   } catch (e) {
     etat.sources.depot = imagesVides();
     if (sourceChoisie() === "depot") afficherPlan();
     el("etat-depot").textContent = "";
-    signaler("etat-depot", T("err-manifeste-charge", espace(e.message)), "alerte");
+    signaler("etat-depot", tr("err-manifeste-charge", espace(e.message)), "alerte");
   } finally {
     el("btn-charge").disabled = false;
   }
@@ -1079,7 +1079,7 @@ async function lireFichiersChoisis() {
   if (manquants.length) {
     etat.sources.local = imagesVides();
     if (manquants.length < 3) {
-      signaler("etat-local", T("err-fichiers-manquants", manquants.join(", ")), "alerte");
+      signaler("etat-local", tr("err-fichiers-manquants", manquants.join(", ")), "alerte");
     } else {
       signaler("etat-local", "", "note");
     }
@@ -1091,7 +1091,7 @@ async function lireFichiersChoisis() {
   etat.sources.local = {
     images: images,
     plan: plan,
-    manifeste: { nom: "RFSentinel", version: T("version-locale"), local: true,
+    manifeste: { nom: "RFSentinel", version: tr("version-locale"), local: true,
       urls: {}, sha: {}, taille: {} }
   };
   afficherPlan();
@@ -1122,7 +1122,7 @@ async function choisirPort() {
   try {
     etat.port = await navigator.serial.requestPort();
   } catch (e) {
-    journaliser(T("journal-port-annulee", e.message), "avert");
+    journaliser(tr("journal-port-annulee", e.message), "avert");
     return;
   }
   await detecter();
@@ -1192,19 +1192,19 @@ async function telechargerImages() {
   var plan = etat.sources.depot.plan;
   for (var i = 0; i < plan.length; i++) {
     var p = plan[i];
-    journaliser(T("journal-telech", p.fichier), "info");
+    journaliser(tr("journal-telech", p.fichier), "info");
     var reponse = await fetch(p.url, { cache: "no-store" });
-    if (!reponse.ok) throw new Error(T("err-image-serveur", p.fichier, reponse.status, p.url));
+    if (!reponse.ok) throw new Error(tr("err-image-serveur", p.fichier, reponse.status, p.url));
     var donnees = new Uint8Array(await reponse.arrayBuffer());
     if (p.taille && donnees.length !== p.taille) {
-      throw new Error(T("err-image-taille", p.fichier, donnees.length, p.taille));
+      throw new Error(tr("err-image-taille", p.fichier, donnees.length, p.taille));
     }
     if (p.sha256) {
       var empreinte = await sha256(donnees);
       if (empreinte && empreinte !== p.sha256.toLowerCase()) {
-        throw new Error(T("err-image-empreinte", p.fichier));
+        throw new Error(tr("err-image-empreinte", p.fichier));
       }
-      journaliser(T("journal-empreinte-ok", p.fichier), "ok");
+      journaliser(tr("journal-empreinte-ok", p.fichier), "ok");
     }
     images.push({ address: p.address, fichier: p.fichier, data: donnees, taille: donnees.length });
   }
@@ -1284,7 +1284,7 @@ async function ecrire() {
   var images = src.images;
   try {
     if (sourceChoisie() === "depot" && !images.length) {
-      journaliser(T("journal-recup"), "info");
+      journaliser(tr("journal-recup"), "info");
       images = await obtenirImages();
       src.images = images;
     }
@@ -1294,15 +1294,15 @@ async function ecrire() {
     var fileArray = [];
     for (i = 0; i < images.length; i++) {
       fileArray.push({ data: images[i].data, address: images[i].address });
-      el("lib" + i).textContent = T("lib-image-adresse",
+      el("lib" + i).textContent = tr("lib-image-adresse",
         fichierParAdresse[images[i].address], hexadecale(images[i].address));
       el("pct" + i).textContent = octets(images[i].taille);
     }
 
     if (effacer) {
-      journaliser(T("journal-effacement"), "avert");
+      journaliser(tr("journal-effacement"), "avert");
       await etat.esp.eraseFlash();
-      journaliser(T("journal-efface"), "ok");
+      journaliser(tr("journal-efface"), "ok");
     }
 
     await etat.esp.writeFlash({
@@ -1327,7 +1327,7 @@ async function ecrire() {
       if (barre) { barre.classList.add("finie"); barre.firstElementChild.style.width = "100%"; }
     }
 
-    journaliser(T("journal-reinit"), "info");
+    journaliser(tr("journal-reinit"), "info");
     await etat.esp.after("hard_reset");
     await deconnecter();
 
@@ -1339,7 +1339,7 @@ async function ecrire() {
     if (el("opt-suivi").checked) surveillerConsole();
   } catch (e) {
     var message = String(e && e.message ? e.message : e);
-    journaliser(T("journal-echec", message), "pb");
+    journaliser(tr("journal-echec", message), "pb");
     etat.resultat = { cle: "res-echec", classe: "erreur", args: [espace(message)] };
     afficherResultat();
     await deconnecter();
@@ -1352,18 +1352,18 @@ async function ecrire() {
 async function effacerFlash() {
   if (!etat.esp) { await detecter(); }
   if (!etat.esp) return;
-  if (!window.confirm(T("confirm-effacer"))) return;
+  if (!window.confirm(tr("confirm-effacer"))) return;
   etat.occupE = true;
   majBoutons();
   viderJournal();
   try {
     await etat.esp.eraseFlash();
-    journaliser(T("journal-efface-vide"), "ok");
+    journaliser(tr("journal-efface-vide"), "ok");
     etat.resultat = { cle: "res-efface", classe: "alerte" };
     afficherResultat();
     await deconnecter();
   } catch (e) {
-    journaliser(T("journal-effac-imp", e.message), "pb");
+    journaliser(tr("journal-effac-imp", e.message), "pb");
   } finally {
     etat.occupE = false;
     majBoutons();
@@ -1378,13 +1378,13 @@ async function surveillerConsole() {
   try {
     await etat.port.open({ baudRate: 115200 });
   } catch (e) {
-    journaliser(T("journal-suivi-imp", e.message), "avert");
+    journaliser(tr("journal-suivi-imp", e.message), "avert");
     return;
   }
   var transport = new globalThis.esptooljs.Transport(etat.port, false);
   var arret = false;
   var tampon = "";
-  journaliser(T("journal-sortie"), "info");
+  journaliser(tr("journal-sortie"), "info");
   var lecture = transport.rawRead(function (donnees) {
     tampon += new TextDecoder("utf-8", { fatal: false }).decode(donnees);
     var lignes = tampon.split(String.fromCharCode(10));
@@ -1417,9 +1417,9 @@ function majBoutons() {
   if (pret || etat.occupE) {
     signaler("hint-port", "", "note");
   } else if (sourceChoisie() === "depot") {
-    signaler("hint-port", T("hint-port-depot"), "note");
+    signaler("hint-port", tr("hint-port-depot"), "note");
   } else {
-    signaler("hint-port", T("hint-port-local"), "note");
+    signaler("hint-port", tr("hint-port-local"), "note");
   }
 }
 

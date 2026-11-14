@@ -1,9 +1,16 @@
-/* Flasher navigateur : le script de la page est charge tel quel dans un
-   contexte isole, puis les fonctions pures sont verifiees.
-   Le DOM est absent : la page s'arrete a l'enregistrement de demarrage. */
+/* Flasher navigateur : le vendor puis le script de la page sont charges dans le
+   meme contexte, dans l'ordre du navigateur, puis les fonctions pures sont
+   verifiees. Le DOM est absent : la page s'arrete a l'enregistrement de
+   demarrage.
+   Le vendor est charge en premier parce que c'est un script classique, comme la
+   page : ses declarations globales occupent l'espace d'names du contexte, et un
+   nom deja pris par esptool-js rendrait tout le script de la page invalide.
+   C'est ce qui est arrive a la fonction de traduction, appelee T a l'origine,
+   alors que le bundle minifie declare deja son propre T. */
 const fs=require('fs'),path=require('path'),vm=require('vm'),assert=require('assert'),crypto=require('crypto');
 const RACINE=path.join(__dirname,'..');
 const page=fs.readFileSync(path.join(RACINE,'webtool/index.html'),'utf8');
+const vendor=fs.readFileSync(path.join(RACINE,'webtool/vendor/esptool-js/bundle.global.js'),'utf8');
 
 /* Le script de la page est le dernier bloc <script>. */
 const blocs=page.split('<script ').length - 1 + page.split('<script>').length - 1;
@@ -14,16 +21,38 @@ const elements={};
 const attributs={};
 const document={readyState:'loading',addEventListener(){},documentElement:{getAttribute(n){return Object.prototype.hasOwnProperty.call(attributs,n)?attributs[n]:null;},setAttribute(n,v){attributs[n]=String(v);}},
   createElement(){return{style:{},classList:{add(){},remove(){},toggle(){}},firstElementChild:{style:{}}};},
-  getElementById(id){return elements[id]||(elements[id]={style:{},classList:{add(){},remove(){},toggle(){}},firstElementChild:{style:{},textContent:''},hidden:true,checked:false,value:'',textContent:'',innerHTML:'',_a:{},setAttribute(n,v){this._a[n]=String(v);},getAttribute(n){return this._a[n]===undefined?null:this._a[n];}});}};
+  getElementById(id){return elements[id]||(elements[id]={style:{},classList:{add(){},remove(){},toggle(){}},firstElementChild:{style:{},textContent:''},hidden:true,checked:false,value:'',textContent:'',innerHTML:'',_a:{},_h:{},
+    addEventListener(n,f){this._h[n]=f;},declenche(n){const f=this._h[n];if(!f)throw new Error('aucun ecouteur '+n+' sur l element demande');f({type:n,target:this});},
+    setAttribute(n,v){this._a[n]=String(v);},getAttribute(n){return this._a[n]===undefined?null:this._a[n];}});}};
 const contexte={document,navigator:{},location:{protocol:'file:',href:'file:///webtool/index.html'},
   window:{isSecureContext:true},console,Error,Math,JSON,String,Number,Array,Object,Boolean,RegExp,Promise,
-  parseInt,parseFloat,isFinite,isNaN,setTimeout,clearTimeout,Date,Uint8Array,Uint32Array,ArrayBuffer,
+  parseInt,parseFloat,isFinite,isNaN,setTimeout,clearTimeout,Date,Uint8Array,Uint16Array,Uint32Array,
+  Int32Array,Float64Array,ArrayBuffer,DataView,
   TextEncoder,TextDecoder,URL,fetch:undefined,
   localStorage:(function(){var d={};return{getItem(k){return Object.prototype.hasOwnProperty.call(d,k)?d[k]:null;},
     setItem(k,v){d[k]=String(v);}};})()};
 contexte.globalThis=contexte;
 vm.createContext(contexte);
+vm.runInContext(vendor,contexte,{filename:'webtool/vendor/esptool-js/bundle.global.js'});
+assert.equal(typeof contexte.esptooljs,'object','le vendor doit exposer esptooljs');
 vm.runInContext(script,contexte,{filename:'webtool/index.html'});
+
+/* 0 — noms reserves par le vendor : un nom de la page deja declare par
+   esptool-js rendrait tout le script invalide, en silence pour une partie du
+   code mais visible des le chargement. La liste est etablie en testant chaque
+   nom de premier niveau de la page contre le vendor. */
+const nomsPage=script.match(/^(?:function|var|let|const|class)\s+([A-Za-z_$][\w$]*)/gm)
+  .map(function(x){return x.replace(/^(?:function|var|let|const|class)\s+/,'');});
+const reserves={};
+for(const nom of nomsPage){
+  const sonde=vm.createContext({navigator:{},location:{href:'file:///'},console:{log(){},warn(){},error(){}},document:{},window:{}});
+  vm.runInContext(vendor,sonde,{filename:'vendor'});
+  try{vm.runInContext('function '+nom+'(){}',sonde,{filename:'sonde'});}
+  catch(e){reserves[nom]=true;}
+}
+const enConflit=nomsPage.filter(function(n){return reserves[n];});
+assert.deepEqual(enConflit,[],'noms de la page deja pris par le vendor : '+enConflit.join(', '));
+assert.ok(nomsPage.length>=50,'la liste de noms de la page parait incomplete');
 
 /* 1 — MD5 : esptool-js appele calculateMD5Hash sur 1,4 Mo, l'implementation
    maison doit coller a crypto de bout en bout. */
@@ -158,16 +187,16 @@ const sansTitre=C.IDS_TITRE.map(t=>'titre-'+t).filter(t=>C.I18N.fr[t]===undefine
 assert.deepEqual(sansTitre,[],'titres sans traduction : '+sansTitre.join(', '));
 C.appliquerLangue('en');
 assert.equal(C.langue(),'en','la langue bascule');
-assert.match(C.T('err-puce'),/ESP32-S3/,'le nom de puce reste en anglais');
-assert.match(C.T('err-manifeste-json'),/JSON/);
-assert.match(C.T('err-manifeste-images'),/images/);
-assert.equal(C.T('lib-image-adresse','rfsentinel.bin','0x10000'),'rfsentinel.bin at 0x10000');
+assert.match(C.tr('err-puce'),/ESP32-S3/,'le nom de puce reste en anglais');
+assert.match(C.tr('err-manifeste-json'),/JSON/);
+assert.match(C.tr('err-manifeste-images'),/images/);
+assert.equal(C.tr('lib-image-adresse','rfsentinel.bin','0x10000'),'rfsentinel.bin at 0x10000');
 C.appliquerLangue('fr');
 assert.equal(C.langue(),'fr');
-assert.match(C.T('err-puce'),/ESP32-S3/);
-assert.match(C.T('err-manifeste-json'),/JSON/);
-assert.match(C.T('err-manifeste-images'),/images/);
-assert.equal(C.T('lib-image-adresse','rfsentinel.bin','0x10000'),'rfsentinel.bin à 0x10000');
+assert.match(C.tr('err-puce'),/ESP32-S3/);
+assert.match(C.tr('err-manifeste-json'),/JSON/);
+assert.match(C.tr('err-manifeste-images'),/images/);
+assert.equal(C.tr('lib-image-adresse','rfsentinel.bin','0x10000'),'rfsentinel.bin à 0x10000');
 assert.equal(C.octets(21648),'21.1 Ko','les tailles ne dependent pas de la langue');
 
 /* Les messages de controle suivent la langue choisie, y compris apres coup. */
@@ -212,7 +241,34 @@ C.basculerLangue('fr');
 assert.equal(C.langue(),'fr','le choix est memorise');
 C.appliquerLangue('en');
 
-/* 11 — mode hors ligne : les trois fichiers choisis sur disque produisent le
+/* 11 — demarrage et clics : le selecteur de langue et le bouton de theme
+   doivent reagir a l'evenement, pas seulement aux fonctions appelees a la main.
+   C'est le chemin qui etait casse quand le script de la page etait rejete en
+   bloc par le navigateur : aucun ecouteur n'etait enregistre. */
+C.demarrer();
+const selecteur=C.document.getElementById('sel-langue');
+const boutonTheme=C.document.getElementById('btn-theme');
+selecteur.value='en';
+selecteur.declenche('change');
+assert.equal(C.langue(),'en','le changement de langue par le selecteur agit');
+assert.equal(C.document.documentElement.getAttribute('lang'),'en');
+assert.match(C.document.getElementById('intro').innerHTML,/This page writes the firmware/,'les textes de la page suivent le clic');
+assert.equal(C.document.getElementById('sel-langue').value,'en','le selecteur reste sur la langue affichée');
+assert.equal(C.langueMemorisee(),'en','la langue est memorisee pour le rechargement');
+selecteur.value='fr';
+selecteur.declenche('change');
+assert.equal(C.langue(),'fr');
+assert.equal(C.langueMemorisee(),'fr');
+
+assert.equal(C.theme(),'dark','le theme part du sombre');
+boutonTheme.declenche('click');
+assert.equal(C.theme(),'light','le bouton de theme bascule');
+assert.equal(C.document.documentElement.getAttribute('data-theme'),'light');
+assert.equal(C.localStorage.getItem('rfs-theme'),'light','le theme est memorise');
+boutonTheme.declenche('click');
+assert.equal(C.theme(),'dark','et revient en arriere');
+
+/* 12 — mode hors ligne : les trois fichiers choisis sur disque produisent le
    meme plan impose, sans empreinte SHA-256 publiee. */
 const fauxFichier=(nom,taille)=>({name:nom,arrayBuffer:async()=>new Uint8Array(taille).buffer});
 const fichiers={'f-boot':[fauxFichier('bootloader.bin',21648)],'f-part':[fauxFichier('partition-table.bin',3072)],'f-app':[fauxFichier('rfsentinel.bin',3072)]};
