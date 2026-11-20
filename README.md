@@ -260,6 +260,65 @@ On Windows, PowerShell prints the same hash with `Get-FileHash`.
 browser flasher. `tools/package_webtool_firmware.py` refreshes both folders in one
 pass and cross-checks the hashes, so `bin/` and `webtool/firmware/` never drift apart.
 
+## Flashing from the browser
+
+**The recommended way to flash a dongle is the online flasher:
+<https://upd.rnd0.fr/rfsentinel/>.** It is the page from this repository, served
+next to the images it writes, so there is nothing to install and nothing to
+configure. Open the link in Chrome or Edge, choose the port, write. The images it
+offers carry the hashes given in the table above.
+
+![Recommended RFSentinel browser flasher](screen/webtool.png)
+
+The page itself is `webtool/index.html`. It drives the serial port through the Web
+Serial API and relies on [esptool-js](https://github.com/espressif/esptool-js) 0.7.1,
+loaded locally from `webtool/vendor/esptool-js/` — no CDN, no intermediate service.
+Chrome and Edge are the only browsers that expose the serial port; Safari and
+Firefox cannot open it at all. Every image has its SHA-256 verified before anything
+is written.
+
+The page is bilingual French / English: a selector sits in the header, the choice is
+remembered in the browser, and the first visit takes the language of the browser.
+
+Open the file directly (double-click) or serve it locally:
+
+```bash
+python3 -m http.server 8000     # then http://localhost:8000/webtool/
+```
+
+The page works over `file://`, over HTTPS and on `localhost`; elsewhere the browser
+refuses access to the serial port.
+
+1. Choose where the images come from: the repository (manifest plus three files, with
+   SHA-256 verification) or three `.bin` files taken from your disk.
+2. Plug in the dongle, click "Choose port", select `USB JTAG/serial debug unit`. If
+   the list is empty, hold BOOT while plugging it in.
+3. Confirm the actual memory size, then write. The page reads the chip and its
+   capacity before any write and refuses a board that is not an ESP32-S3 with 16 MB.
+
+The write plan is hard-coded in the page (`dio` / `80 MHz` / `16 MB`, at addresses
+`0x0`, `0x8000` and `0x10000`), and a manifest cannot change it: that is the only
+barrier against an 8 MB board. After writing, the MD5 fingerprint read back from flash
+is compared with the one of the image that was sent.
+
+The "From repository" mode reads the firmware from `webtool/firmware/`, which the
+repository must contain. Regenerate it after every build:
+
+```bash
+idf.py build
+python3 tools/package_webtool_firmware.py    # refreshes bin/ and webtool/firmware/
+python3 tools/make_webtool_vendor.py         # only when the esptool-js version changes
+```
+
+The sizes and fingerprints in the firmware binaries section describe the images in `bin/`.
+The browser flasher verifies the fingerprint announced by the manifest it loads.
+
+> Hosting matters more than it looks. The attachments of a GitHub release return no
+> `Access-Control-Allow-Origin` header, so a page served from another site cannot read
+> them. The raw files of a repository and a Pages site do return that header. The
+> simplest setup stays the one used at `upd.rnd0.fr/rfsentinel/`: page, manifest and
+> images come from the same host, so no cross-origin rule is involved.
+
 ## Flashing with esptool
 
 Flash parameters are the same everywhere: `--flash-mode dio --flash-freq 80m
@@ -355,65 +414,6 @@ deprecation warning, so the same old command keeps running after an upgrade.
 
 If the port list is empty or the tool cannot connect, hold the BOOT button while
 plugging the dongle in, then retry.
-
-## Flashing from the browser
-
-**The recommended way to flash a dongle is the online flasher:
-<https://upd.rnd0.fr/rfsentinel/>.** It is the page from this repository, served
-next to the images it writes, so there is nothing to install and nothing to
-configure. Open the link in Chrome or Edge, choose the port, write. The images it
-offers carry the hashes given in the table above.
-
-![Recommended RFSentinel browser flasher](screen/webtool.png)
-
-The page itself is `webtool/index.html`. It drives the serial port through the Web
-Serial API and relies on [esptool-js](https://github.com/espressif/esptool-js) 0.7.1,
-loaded locally from `webtool/vendor/esptool-js/` — no CDN, no intermediate service.
-Chrome and Edge are the only browsers that expose the serial port; Safari and
-Firefox cannot open it at all. Every image has its SHA-256 verified before anything
-is written.
-
-The page is bilingual French / English: a selector sits in the header, the choice is
-remembered in the browser, and the first visit takes the language of the browser.
-
-Open the file directly (double-click) or serve it locally:
-
-```bash
-python3 -m http.server 8000     # then http://localhost:8000/webtool/
-```
-
-The page works over `file://`, over HTTPS and on `localhost`; elsewhere the browser
-refuses access to the serial port.
-
-1. Choose where the images come from: the repository (manifest plus three files, with
-   SHA-256 verification) or three `.bin` files taken from your disk.
-2. Plug in the dongle, click "Choose port", select `USB JTAG/serial debug unit`. If
-   the list is empty, hold BOOT while plugging it in.
-3. Confirm the actual memory size, then write. The page reads the chip and its
-   capacity before any write and refuses a board that is not an ESP32-S3 with 16 MB.
-
-The write plan is hard-coded in the page (`dio` / `80 MHz` / `16 MB`, at addresses
-`0x0`, `0x8000` and `0x10000`), and a manifest cannot change it: that is the only
-barrier against an 8 MB board. After writing, the MD5 fingerprint read back from flash
-is compared with the one of the image that was sent.
-
-The "From repository" mode reads the firmware from `webtool/firmware/`, which the
-repository must contain. Regenerate it after every build:
-
-```bash
-idf.py build
-python3 tools/package_webtool_firmware.py    # refreshes bin/ and webtool/firmware/
-python3 tools/make_webtool_vendor.py         # only when the esptool-js version changes
-```
-
-The sizes and fingerprints in the two sections above describe the images in `bin/`.
-The browser flasher verifies the fingerprint announced by the manifest it loads.
-
-> Hosting matters more than it looks. The attachments of a GitHub release return no
-> `Access-Control-Allow-Origin` header, so a page served from another site cannot read
-> them. The raw files of a repository and a Pages site do return that header. The
-> simplest setup stays the one used at `upd.rnd0.fr/rfsentinel/`: page, manifest and
-> images come from the same host, so no cross-origin rule is involved.
 
 ## Web API
 

@@ -256,41 +256,6 @@ complet pour HTTPS, serveur HTTP embarqué.
 | `factory` | app | `0x10000` | 3 Mo |
 | `storage` | data/littlefs | `0x310000` | 13 Mo (`0xCF0000`) |
 
-## Flash
-
-Les trois images de la version courante se trouvent dans le dossier
-[`bin/`](../../bin), à côté d'un fichier `SHA256SUMS`, pour flasher sans compiler.
-Paramètres de flash :
-`--flash_mode dio --flash_freq 80m --flash_size 16MB`.
-
-| Adresse | Fichier | Taille |
-|---|---|---|
-| `0x0` | `bootloader.bin` | 21 648 o |
-| `0x8000` | `partition-table.bin` | 3 072 o |
-| `0x10000` | `rfsentinel.bin` | 1 482 464 o |
-
-Empreintes SHA-256 des binaires de la version 1.0.0 :
-
-```
-f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297  bootloader.bin
-4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913  partition-table.bin
-65ec22d5a8daac6222d0a90345e6e737490440ceeb8c32f8a4fcf8571cc17fa2  rfsentinel.bin
-```
-
-```bash
-esptool.py --chip esp32s3 -p /dev/ttyACM0 -b 460800 --before default_reset \
-  --after hard_reset write_flash \
-  --flash_mode dio --flash_freq 80m --flash_size 16MB \
-  0x0 bootloader.bin \
-  0x8000 partition-table.bin \
-  0x10000 rfsentinel.bin
-```
-
-Par `idf.py -p /dev/ttyACM0 flash`, le projet écrit les trois mêmes zones.
-
-> Vérifier le modèle exact avant d'écrire dans la flash. Une table de partitions
-> de 16 Mo sur une carte de 8 Mo rendrait l'appareil inopérant.
-
 ## Flasher depuis le navigateur
 
 **La méthode conseillée pour flasher une clé est le Web Flasher en ligne :
@@ -356,6 +321,41 @@ manifeste qu'il charge, pas celle du tableau.
 > en renvoient. Le montage le plus simple reste celui de `upd.rnd0.fr/rfsentinel/` :
 > page, manifeste et images sur le même serveur, donc aucune règle cross-origin à
 > configurer.
+
+## Flash
+
+Les trois images de la version courante se trouvent dans le dossier
+[`bin/`](../../bin), à côté d'un fichier `SHA256SUMS`, pour flasher sans compiler.
+Paramètres de flash :
+`--flash_mode dio --flash_freq 80m --flash_size 16MB`.
+
+| Adresse | Fichier | Taille |
+|---|---|---|
+| `0x0` | `bootloader.bin` | 21 648 o |
+| `0x8000` | `partition-table.bin` | 3 072 o |
+| `0x10000` | `rfsentinel.bin` | 1 482 464 o |
+
+Empreintes SHA-256 des binaires de la version 1.0.0 :
+
+```
+f7e8d5acf0157d246f2594c415728fe98a15e294ab8a0c1cbfe4a61841fe5297  bootloader.bin
+4c41038930270e3e0073c60762b35cd693ad237238c335617ba9a03a0cfdf913  partition-table.bin
+65ec22d5a8daac6222d0a90345e6e737490440ceeb8c32f8a4fcf8571cc17fa2  rfsentinel.bin
+```
+
+```bash
+esptool.py --chip esp32s3 -p /dev/ttyACM0 -b 460800 --before default_reset \
+  --after hard_reset write_flash \
+  --flash_mode dio --flash_freq 80m --flash_size 16MB \
+  0x0 bootloader.bin \
+  0x8000 partition-table.bin \
+  0x10000 rfsentinel.bin
+```
+
+Par `idf.py -p /dev/ttyACM0 flash`, le projet écrit les trois mêmes zones.
+
+> Vérifier le modèle exact avant d'écrire dans la flash. Une table de partitions
+> de 16 Mo sur une carte de 8 Mo rendrait l'appareil inopérant.
 
 ## API Web
 
