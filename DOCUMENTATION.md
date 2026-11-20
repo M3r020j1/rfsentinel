@@ -286,10 +286,15 @@ back to `UNKNOWN`.
 `scan_ble`, `ble_address_filter`, `scan_autostart`, `ui_lang`, MQTT (enable,
 broker, port,
 user, password, topic, client id, TLS), NTP (server and timezone) and
-`device_id`.
+`device_id` and the network `hostname`.
 
 Rules:
 
+- `hostname` is stored in NVS and defaults to `rfsentinel`. It contains 1–32
+  lowercase ASCII letters, digits or hyphens, beginning and ending with a letter
+  or digit. After a reboot it is used for both the DHCP hostname and the mDNS
+  hostname; `.local` is added only for mDNS access. Invalid stored values fall
+  back to the default.
 - `config_needs_password_change()` returns true while the credentials are still
   `admin`/`admin`; the interface then forces the change.
 - `config_has_password()`, `config_has_token()` and

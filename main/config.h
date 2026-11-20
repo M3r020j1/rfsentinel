@@ -26,11 +26,14 @@
 #define CFG_NTP_MAX   32
 #define CFG_TZ_MAX    32
 #define CFG_DEVID_MAX 24
+#define CFG_HOSTNAME_MAX 33 /* ESP-IDF 5.3 hostname limit is 32 characters. */
+#define CFG_HOSTNAME_DEFAULT "rfsentinel"
 
 typedef struct {
     /* Wi-Fi client (STA) */
     char wifi_ssid[CFG_SSID_MAX];
     char wifi_pass[CFG_PASS_MAX];
+    char hostname[CFG_HOSTNAME_MAX];
 
     /* Identifiants administrateur WebUI */
     char web_user[CFG_USER_MAX];
@@ -102,6 +105,8 @@ bool config_check_credentials(const char *user, const char *pass);
 
 /* Mutateurs valides (validation interne, ecritures NVS limitees). */
 esp_err_t config_set_wifi(const char *ssid, const char *pass);
+bool config_hostname_valid(const char *hostname);
+esp_err_t config_set_hostname(const char *hostname);
 esp_err_t config_set_ap(const char *ssid, const char *pass);
 esp_err_t config_set_scan_autostart(uint8_t enabled);
 esp_err_t config_set_ble_address_filter(uint8_t mode);

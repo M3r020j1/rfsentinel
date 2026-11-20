@@ -263,6 +263,8 @@ button.it svg { width:16px; height:16px; flex:none; }
       <div class="row"><label for="cfWigleToken">WiGLE API Token</label><div class="password-field"><input id="cfWigleToken" type="password" autocomplete="off"><button id="toggleWigleToken" class="pw-toggle secondary" type="button" data-target="cfWigleToken" aria-label="Afficher la valeur saisie" title="Afficher la valeur saisie" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       <p style="color:var(--muted);font-size:12px" data-i18n="secretHint">L’œil affiche le champ en cours de saisie. Une valeur déjà enregistrée ne peut pas être affichée.</p>
       <h3 data-i18n="secNet">Connexion réseau</h3>
+      <div class="row"><label for="cfHostname" data-i18n="hostname">Nom réseau</label><input id="cfHostname" maxlength="32" autocomplete="off" spellcheck="false" aria-describedby="hostnameHelp"></div>
+      <p id="hostnameHelp" data-i18n="hostnameHelp" style="color:var(--muted);font-size:12px">Nom DHCP et mDNS (ex. rfsentinel.local). Minuscules, chiffres et tirets ; redémarrage nécessaire après modification.</p>
       <div class="row"><label>SSID</label><input id="cfSsid"></div>
       <div class="row"><label data-i18n="wifiPass">Clé Wi-Fi</label><div class="password-field"><input id="cfWifipass" type="password" autocomplete="off"><button id="toggleWifipass" class="pw-toggle secondary" type="button" data-target="cfWifipass" aria-label="Afficher la valeur saisie" title="Afficher la valeur saisie" aria-pressed="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></button></div></div>
       <div class="row"><label>AP SSID</label><input id="cfApSsid"></div>
@@ -396,7 +398,7 @@ const I18N = {
     lastSync:"Dern. sync", start:"Démarrer", stop:"Arrêter", refresh:"Rafraîchir",
     obs:"Observations", type:"Type", all:"Tous", ts:"Date", typeH:"Type",
     tsqH:"Horloge", journal:"Journal", scanAuto:"Scan au démarrage", scanState:"Scan", syncClock:"Régler l’heure depuis cet appareil", counterNote:"Observations présentes dans le journal, toutes pages confondues.", hist:"Historique de l'équipement", histPrompt:"Sélectionnez une observation pour afficher son historique.", config:"Configuration",
-    secSec:"Sécurité et accès WebUI", secNet:"Connexion réseau", secLoc:"Localisation",
+    secSec:"Sécurité et accès WebUI", secNet:"Connexion réseau", secLoc:"Localisation", hostname:"Nom réseau", hostnameHelp:"Nom DHCP et mDNS (ex. rfsentinel.local). Minuscules, chiffres et tirets ; redémarrage nécessaire après modification.",
     address:"Adresse", findAddress:"Rechercher l’adresse", addressResults:"Résultats", useAddress:"Utiliser cette adresse",
     chooseAddress:"Choisissez une adresse", addressRequired:"Saisissez une adresse à rechercher.", addressSearching:"Recherche en cours…", addressNone:"Aucune adresse trouvée. Précisez la recherche.", addressError:"Recherche impossible. Vérifiez l’accès Internet de cet appareil et réessayez.", addressSelected:"Coordonnées renseignées. Cliquez sur Enregistrer pour les conserver.",
     secMon:"Surveillance et scans", secTime:"Date et heure", wifiPass:"Clé Wi-Fi",
@@ -444,7 +446,7 @@ const I18N = {
     lastSync:"Last sync", start:"Start", stop:"Stop", refresh:"Refresh",
     obs:"Observations", type:"Type", all:"All", ts:"Date", typeH:"Type",
     tsqH:"Clock", journal:"Log", scanAuto:"Scan at startup", scanState:"Scanning", syncClock:"Set time from this device", counterNote:"Observations currently in the log, across all pages.", hist:"Device history", histPrompt:"Select an observation to view its history.", config:"Settings",
-    secSec:"WebUI security", secNet:"Network", secLoc:"Location",
+    secSec:"WebUI security", secNet:"Network", secLoc:"Location", hostname:"Network name", hostnameHelp:"DHCP and mDNS name (e.g. rfsentinel.local). Lowercase letters, digits and hyphens; restart required after changes.",
     address:"Address", findAddress:"Search for address", addressResults:"Results", useAddress:"Use this address",
     chooseAddress:"Choose an address", addressRequired:"Enter an address to search.", addressSearching:"Searching…", addressNone:"No address found. Refine your search.", addressError:"Search unavailable. Check this device’s Internet connection and try again.", addressSelected:"Coordinates filled in. Click Save to keep them.",
     secMon:"Monitoring and scans", secTime:"Date and time", wifiPass:"Wi-Fi key",
@@ -750,6 +752,7 @@ async function doLogout() {
 }
 
 let loadedWifiSsid = "";
+let loadedHostname = "rfsentinel";
 async function loadConfig() {
   try {
     const j = await get("/api/config");
@@ -761,6 +764,8 @@ async function loadConfig() {
     }
     $("cfUser").value = j.web_user || "";
     $("cfSsid").value = j.wifi_ssid || "";
+    $("cfHostname").value = j.hostname || "rfsentinel";
+    loadedHostname = $("cfHostname").value;
     loadedWifiSsid = j.wifi_ssid || "";
     $("cfApSsid").value = j.ap_ssid || "";
     $("cfLat").value = j.lat;
@@ -796,8 +801,15 @@ async function saveConfig() {
     return;
   }
   const wifiChanged = $("cfSsid").value.trim() !== loadedWifiSsid || $("cfWifipass").value !== "";
+  const hostname = $("cfHostname").value.trim();
+  if (!/^[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?$/.test(hostname)) {
+    msg(lang === "fr" ? "Nom réseau invalide : 1 à 32 caractères, minuscules, chiffres et tirets, sans tiret au début ou à la fin." : "Invalid network name: 1–32 lowercase letters, digits or hyphens; no leading or trailing hyphen.", false);
+    return;
+  }
+  const hostnameChanged = hostname !== loadedHostname;
   const body = {
     wifi_ssid: $("cfSsid").value.trim(),
+    hostname,
     wifi_pass: $("cfWifipass").value,
     web_user: $("cfUser").value.trim(),
     web_pass: $("cfPass").value,
@@ -833,11 +845,17 @@ async function saveConfig() {
   }
   try {
     const j = await post("/api/config", body);
+    if (j.ok && hostnameChanged) {
+      msg(lang === "fr" ? "Configuration enregistrée. Redémarrez la clé pour appliquer le nouveau nom réseau." + (j.ap_changed ? " Reconnectez-vous au point d’accès avec les nouveaux paramètres." : "") : "Settings saved. Restart the device to apply the new network name." + (j.ap_changed ? " Reconnect to the access point using the new settings." : ""), true);
+      return;
+    }
     msg(j.ap_changed
       ? (lang === "fr" ? "Configuration enregistrée. Reconnectez-vous au point d’accès avec les nouveaux paramètres." : "Settings saved. Reconnect to the access point using the new settings.")
       : (wifiChanged ? (lang === "fr" ? "Configuration enregistrée. Redémarrez la clé pour rejoindre le réseau Wi-Fi et utiliser NTP." : "Settings saved. Restart the device to join Wi-Fi and use NTP.") : (j.ok ? t("okSaved") : (j.error || "error"))), !!j.ok);
   } catch (e) {
-    if (e.message === "wigle_credentials_too_long")
+    if (e.message === "hostname_invalid") msg(lang === "fr" ? "Nom réseau invalide." : "Invalid network name.", false);
+    else if (e.message === "hostname_save_failed") msg(lang === "fr" ? "Impossible d’enregistrer le nom réseau." : "Could not save the network name.", false);
+    else if (e.message === "wigle_credentials_too_long")
       msg(lang === "fr" ? "API Name ou API Token WiGLE trop long : 128 octets maximum par champ." : "WiGLE API Name or API Token is too long: maximum 128 bytes per field.", false);
     else if (e.message === "bad_web_credentials")
       msg(lang === "fr" ? "Mot de passe WebUI invalide : laissez le champ vide pour le conserver, ou saisissez au moins 8 caractères." : "Invalid WebUI password: leave it blank to keep it, or enter at least 8 characters.", false);

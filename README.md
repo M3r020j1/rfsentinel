@@ -203,6 +203,15 @@ partition table and will not boot.
 5. Set up the Wi-Fi network, position, thresholds, WiGLE, MQTT, language and
    timezone. Everything is written to NVS and survives reboots.
 
+On the local network, the interface is also available at
+**http://rfsentinel.local** when the client and network support mDNS. Under
+**Configuration → Network**, the **Network name** field sets both the DHCP
+hostname and the mDNS name. Enter 1–32 lowercase letters, digits or hyphens,
+starting and ending with a letter or digit; omit `.local`. Save and restart the
+dongle to apply the change. Give each dongle a different name on the same network.
+If mDNS is unavailable, use the IP shown on the screen or by the router; the
+setup access point remains available at **http://192.168.4.1**.
+
 ## Building
 
 The project targets **ESP-IDF v5.3.2**, chip `esp32s3`. Dependencies are pinned

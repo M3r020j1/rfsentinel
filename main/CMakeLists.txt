@@ -27,6 +27,7 @@ idf_component_register(
         mbedtls
         esp_lcd
         mqtt
+        mdns
     EMBED_FILES
         "${CMAKE_CURRENT_LIST_DIR}/ui/index.html"
         "${CMAKE_CURRENT_LIST_DIR}/../logo/rfsentinel-logo.svg"

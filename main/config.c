@@ -19,6 +19,7 @@ static const char *TAG = "rfs.cfg";
 /* NVS keys (15 chars max) */
 #define K_WIFI_SSID  "wifi_ssid"
 #define K_WIFI_PASS  "wifi_pass"
+#define K_HOSTNAME   "hostname"
 #define K_WEB_USER   "web_user"
 #define K_WEB_PASS   "web_pass"
 #define K_WIGLE_USER "wigle_user"
@@ -138,6 +139,7 @@ void config_defaults(app_config_t *c) {
     memset(c, 0, sizeof(*c));
     strlcpy(c->wifi_ssid, "", CFG_SSID_MAX);
     strlcpy(c->wifi_pass, "", CFG_PASS_MAX);
+    strlcpy(c->hostname, CFG_HOSTNAME_DEFAULT, sizeof(c->hostname));
     strlcpy(c->web_user, CFG_DEFAULT_USER, CFG_USER_MAX);
     strlcpy(c->web_pass, CFG_DEFAULT_PASS, CFG_PASS_MAX);
     strlcpy(c->wigle_user, "", CFG_WIGLE_USER_MAX);
@@ -177,6 +179,8 @@ esp_err_t config_init(void) {
 
     load_str(h, K_WIFI_SSID, s_cfg.wifi_ssid, CFG_SSID_MAX, "");
     load_str(h, K_WIFI_PASS, s_cfg.wifi_pass, CFG_PASS_MAX, "");
+    load_str(h, K_HOSTNAME, s_cfg.hostname, sizeof(s_cfg.hostname), CFG_HOSTNAME_DEFAULT);
+    if (!config_hostname_valid(s_cfg.hostname)) strlcpy(s_cfg.hostname, CFG_HOSTNAME_DEFAULT, sizeof(s_cfg.hostname));
     load_str(h, K_WEB_USER, s_cfg.web_user, CFG_USER_MAX, CFG_DEFAULT_USER);
     load_str(h, K_WEB_PASS, s_cfg.web_pass, CFG_PASS_MAX, CFG_DEFAULT_PASS);
     load_str(h, K_WIGLE_USER, s_cfg.wigle_user, CFG_WIGLE_USER_MAX, "");
@@ -271,6 +275,29 @@ esp_err_t config_set_web_auth(const char *user, const char *pass) {
 bool config_needs_password_change(void) {
     return strcmp(s_cfg.web_user, CFG_DEFAULT_USER) == 0 &&
            strcmp(s_cfg.web_pass, CFG_DEFAULT_PASS) == 0;
+}
+
+bool config_hostname_valid(const char *hostname) {
+    if (!hostname) return false;
+    size_t len = strlen(hostname);
+    if (!len || len >= CFG_HOSTNAME_MAX || hostname[0] == '-' || hostname[len - 1] == '-') return false;
+    for (size_t i = 0; i < len; i++) {
+        char c = hostname[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) return false;
+    }
+    return true;
+}
+
+esp_err_t config_set_hostname(const char *hostname) {
+    if (!config_hostname_valid(hostname)) return ESP_ERR_INVALID_ARG;
+    if (strcmp(s_cfg.hostname, hostname) == 0) return ESP_OK;
+    nvs_handle_t h; esp_err_t err = nvs_open(NVS_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) return err;
+    err = nvs_set_str(h, K_HOSTNAME, hostname);
+    if (err == ESP_OK) err = nvs_commit(h);
+    nvs_close(h);
+    if (err == ESP_OK) strlcpy(s_cfg.hostname, hostname, sizeof(s_cfg.hostname));
+    return err;
 }
 
 esp_err_t config_set_wifi(const char *ssid, const char *pass) {

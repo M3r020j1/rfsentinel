@@ -3,3 +3,4 @@
 dependencies:
   idf: ">=5.3"
   "joltwallet/littlefs": "==1.23.1"
+  "espressif/mdns": "==1.8.2"

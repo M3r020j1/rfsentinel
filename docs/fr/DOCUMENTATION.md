@@ -288,10 +288,15 @@ passe), WiGLE (nom d'API et token), AP de secours (SSID et mot de passe),
 latitude/longitude, `min_rssi`, `mqtt_min_rssi`, `rediscover_min`,
 `scan_wifi`, `scan_ble`, `ble_address_filter`, `scan_autostart`, `ui_lang`,
 MQTT (activation, broker, port, utilisateur, mot de passe, sujet, identifiant,
-TLS), NTP (serveur et fuseau) et `device_id`.
+TLS), NTP (serveur et fuseau), `device_id` et le nom réseau `hostname`.
 
 Règles :
 
+- `hostname` est conservé en NVS et vaut `rfsentinel` par défaut. Il contient
+  1 à 32 lettres ASCII minuscules, chiffres ou tirets, et commence et se termine
+  par une lettre ou un chiffre. Après redémarrage, il est utilisé pour le nom
+  DHCP et le nom mDNS ; `.local` est ajouté seulement pour l'accès mDNS. Une
+  valeur enregistrée invalide revient au nom par défaut.
 - `config_needs_password_change()` renvoie vrai tant que les identifiants valent
   `admin`/`admin` ; l'interface force alors le changement.
 - `config_has_password()`, `config_has_token()` et `config_has_ap_password()` ne

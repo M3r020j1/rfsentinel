@@ -284,6 +284,7 @@ static esp_err_t h_config_get(httpd_req_t *req) {
     char broker[CFG_BROKER_MAX * 2 + 3], mqtt_user[CFG_MQTT_USER_MAX * 2 + 3];
     char topic[CFG_MQTT_TOPIC_MAX * 2 + 3], cid[CFG_MQTT_ID_MAX * 2 + 3];
     char ntp[CFG_NTP_MAX * 2 + 3], tz[CFG_TZ_MAX * 2 + 3], dev[CFG_DEVID_MAX * 2 + 3];
+    char hostname[CFG_HOSTNAME_MAX * 2 + 3];
     json_escape(c->wifi_ssid, ssid, sizeof(ssid));
     json_escape(c->web_user, wuser, sizeof(wuser));
     json_escape(c->ap_ssid, apssid, sizeof(apssid));
@@ -294,6 +295,7 @@ static esp_err_t h_config_get(httpd_req_t *req) {
     json_escape(c->ntp_server, ntp, sizeof(ntp));
     json_escape(c->tz, tz, sizeof(tz));
     json_escape(c->device_id, dev, sizeof(dev));
+    json_escape(c->hostname, hostname, sizeof(hostname));
 
     snprintf(out, RFS_UI_BUF,
         "{"
@@ -306,7 +308,7 @@ static esp_err_t h_config_get(httpd_req_t *req) {
         "\"mqtt_enabled\":%d,\"mqtt_broker\":\"%s\",\"mqtt_port\":%d,"
         "\"mqtt_user_set\":%s,\"mqtt_user\":\"%s\",\"mqtt_pass_set\":%s,\"mqtt_topic\":\"%s\","
         "\"mqtt_client_id\":\"%s\",\"mqtt_tls\":%d,"
-        "\"ntp_server\":\"%s\",\"tz\":\"%s\",\"device_id\":\"%s\""
+        "\"ntp_server\":\"%s\",\"tz\":\"%s\",\"device_id\":\"%s\",\"hostname\":\"%s\""
         "}",
         ssid, c->wifi_pass[0] ? "true" : "false",
         wuser, c->web_pass[0] ? "true" : "false",
@@ -319,7 +321,7 @@ static esp_err_t h_config_get(httpd_req_t *req) {
         (c->mqtt_user[0] ? "true" : "false"), mqtt_user,
         c->mqtt_pass[0] ? "true" : "false",
         topic, cid, (int)c->mqtt_tls,
-        ntp, tz, dev);
+        ntp, tz, dev, hostname);
 
     httpd_resp_set_type(req, "application/json");
     esp_err_t err = httpd_resp_sendstr(req, out);
@@ -339,6 +341,10 @@ static esp_err_t h_config_set(httpd_req_t *req) {
 
     cJSON *wigle_name = cJSON_GetObjectItemCaseSensitive(j, "wigle_user");
     cJSON *wigle_token = cJSON_GetObjectItemCaseSensitive(j, "wigle_token");
+    cJSON *hostname = cJSON_GetObjectItemCaseSensitive(j, "hostname");
+    if (hostname && (!cJSON_IsString(hostname) || !config_hostname_valid(hostname->valuestring))) {
+        cJSON_Delete(j); send_json(req, 400, "{\"ok\":false,\"error\":\"hostname_invalid\"}"); return ESP_OK;
+    }
     if ((cJSON_IsString(wigle_name) && strlen(wigle_name->valuestring) >= CFG_WIGLE_USER_MAX) ||
         (cJSON_IsString(wigle_token) && strlen(wigle_token->valuestring) >= CFG_TOKEN_MAX)) {
         cJSON_Delete(j);
@@ -521,6 +527,9 @@ static esp_err_t h_config_set(httpd_req_t *req) {
             config_set_time(nsv, tzv);
             net_apply_time_config();
         }
+    }
+    if (hostname && config_set_hostname(hostname->valuestring) != ESP_OK) {
+        cJSON_Delete(j); send_json(req, 500, "{\"ok\":false,\"error\":\"hostname_save_failed\"}"); return ESP_OK;
     }
     /* device id */
     {

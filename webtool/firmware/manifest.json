@@ -35,10 +35,10 @@
       "file": "rfsentinel.bin",
       "path": "rfsentinel.bin",
       "offset": 65536,
-      "size": 1482464,
-      "taille": 1482464,
-      "sha256": "65ec22d5a8daac6222d0a90345e6e737490440ceeb8c32f8a4fcf8571cc17fa2",
-      "md5": "b12d84ac49fb598cb53788b75fd575be"
+      "size": 1516848,
+      "taille": 1516848,
+      "sha256": "65ab36938197bf7efa66b5ca593fbba74ceb9ae702b5318b8340c76ba91987d3",
+      "md5": "be097b633e4de2ae783df21822d0becd"
     }
   ]
 }

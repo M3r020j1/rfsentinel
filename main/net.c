@@ -11,6 +11,7 @@
 #include "esp_netif.h"
 #include "esp_event.h"
 #include "esp_netif_sntp.h"
+#include "mdns.h"
 
 static esp_netif_t *s_netif = NULL;
 #include "esp_log.h"
@@ -173,6 +174,16 @@ void net_init(void) {
 
     s_netif = esp_netif_create_default_wifi_sta();
     esp_netif_create_default_wifi_ap();
+    esp_err_t hostname_err = esp_netif_set_hostname(s_netif, cfg->hostname);
+    if (hostname_err != ESP_OK) ESP_LOGW(TAG, "hostname DHCP: %s", esp_err_to_name(hostname_err));
+
+    esp_err_t mdns_err = mdns_init();
+    if (mdns_err == ESP_OK) {
+        mdns_err = mdns_hostname_set(cfg->hostname);
+        if (mdns_err != ESP_OK) mdns_free();
+    }
+    if (mdns_err != ESP_OK) ESP_LOGW(TAG, "mDNS indisponible: %s", esp_err_to_name(mdns_err));
+    else ESP_LOGI(TAG, "hostname: %s, mDNS: %s.local", cfg->hostname, cfg->hostname);
 
     wifi_init_config_t cfg_init = WIFI_INIT_CONFIG_DEFAULT();
     esp_wifi_init(&cfg_init);

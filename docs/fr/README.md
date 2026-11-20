@@ -221,6 +221,16 @@ démarrent pas.
 5. Configurer le réseau Wi-Fi, la position, les seuils, WiGLE, MQTT, la langue et
    le fuseau. Tout est écrit en NVS et survit aux redémarrages.
 
+Sur le réseau local, l'interface est aussi accessible à l'adresse
+**http://rfsentinel.local** si l'appareil utilisé et le réseau prennent en charge
+mDNS. Dans **Configuration → Connexion réseau**, le champ **Nom réseau** définit
+à la fois le nom DHCP et le nom mDNS. Saisir 1 à 32 lettres minuscules, chiffres
+ou tirets, en commençant et en terminant par une lettre ou un chiffre, sans
+`.local`. Enregistrer puis redémarrer la clé pour appliquer le changement.
+Donner un nom différent à chaque clé présente sur le même réseau. Si mDNS ne
+fonctionne pas, utiliser l'adresse IP affichée sur l'écran ou par le routeur ;
+le point d'accès de configuration reste accessible à **http://192.168.4.1**.
+
 ## Construction
 
 Le projet est en **ESP-IDF v5.3.2**, cible `esp32s3`. Les dépendances sont figées
