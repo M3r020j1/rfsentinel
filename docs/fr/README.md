@@ -299,6 +299,8 @@ images qu'elle écrit : rien à installer, rien à configurer. On ouvre le lien 
 Chrome ou Edge, on choisit le port, on écrit. Les images proposées portent les
 empreintes indiquées dans le tableau du § Flash.
 
+![Interface du Web Flasher RFSentinel conseillé](../../screen/webtool.png)
+
 La page elle-même est `webtool/index.html`. Elle pilote le port série par l'API
 Web Serial et s'appuie sur [esptool-js](https://github.com/espressif/esptool-js)
 0.7.1, chargé en local depuis `webtool/vendor/esptool-js/` — aucun CDN, aucun

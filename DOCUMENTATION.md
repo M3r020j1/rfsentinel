@@ -793,6 +793,8 @@ access from HTTPS, `localhost` or `file://`. The recommended deployment is the c
 served at <https://upd.rnd0.fr/rfsentinel/>, where the page and the images come from
 the same host; the local options described below stay available as fallbacks.
 
+![Recommended RFSentinel browser flasher](screen/webtool.png)
+
 The engine chosen is not `esp-web-tools`, the most common solution: its manifests
 write with `flashMode`, `flashFreq` and `flashSize` set to `keep`, meaning the
 settings already present in the board. Yet the main risk of this project is an 8 MB

@@ -771,6 +771,8 @@ conseillé est la copie servie sur <https://upd.rnd0.fr/rfsentinel/>, où la pag
 les images viennent du même serveur ; les montages locaux décrits plus bas restent
 des solutions de repli.
 
+![Interface du Web Flasher RFSentinel conseillé](../../screen/webtool.png)
+
 Le moteur choisi n'est pas `esp-web-tools`, la solution la plus répandue : ses
 éléments écrivent avec `flashMode`, `flashFreq` et `flashSize` à `keep`,
 c'est-à-dire les réglages déjà présents dans la carte. Or le risque principal du

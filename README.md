@@ -364,6 +364,8 @@ next to the images it writes, so there is nothing to install and nothing to
 configure. Open the link in Chrome or Edge, choose the port, write. The images it
 offers carry the hashes given in the table above.
 
+![Recommended RFSentinel browser flasher](screen/webtool.png)
+
 The page itself is `webtool/index.html`. It drives the serial port through the Web
 Serial API and relies on [esptool-js](https://github.com/espressif/esptool-js) 0.7.1,
 loaded locally from `webtool/vendor/esptool-js/` — no CDN, no intermediate service.
